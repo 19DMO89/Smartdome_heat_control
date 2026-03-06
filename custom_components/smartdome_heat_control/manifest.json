@@ -1,10 +1,10 @@
 {
   "domain": "smartdome_heat_control",
   "name": "Smartdome Heat Control",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "documentation": "https://github.com/your-repo/smart-heating",
   "issue_tracker": "https://github.com/your-repo/smart-heating/issues",
   "dependencies": ["frontend", "http"],
-  "iot_class": "local_push",
+  "iot_class": "local_push"
 
 }
