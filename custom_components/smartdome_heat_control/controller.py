@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik mit 0.5°C Hysterese."""
+"""Smart Heating Controller – Kernlogik mit dynamischem Hauptthermostat-Boost."""
 from __future__ import annotations
 
 import logging
@@ -32,7 +32,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class SmartHeatingController:
-    """Kernlogik: Einzelraum-Steuerung mit 0.5 Grad Hysterese."""
+    """Kernlogik: Dynamischer Hauptthermostat-Boost + 22°C Standby."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
@@ -40,7 +40,7 @@ class SmartHeatingController:
         self._unsub: list = []
 
     async def async_start(self) -> None:
-        """Listener und Zeitsteuerung registrieren."""
+        """Listener und minütlichen Check registrieren."""
         self._unsubscribe_all()
 
         active_rooms = self._active_rooms()
@@ -51,12 +51,12 @@ class SmartHeatingController:
                 async_track_state_change_event(self.hass, sensors, self._on_temp_change)
             )
 
-        # Minütlicher Check für Zeitplan-Wechsel
+        # Überprüft jede Minute Zeitpläne und Hysteresen
         self._unsub.append(
             async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
 
-        _LOGGER.info("Smart Heating Controller gestartet (Hysterese: 0.5°C)")
+        _LOGGER.info("Smart Heating Controller aktiv: Dynamischer Haupt-Boost + 22° Standby")
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -70,7 +70,7 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    # ── Zeit-Logik ────────────────────────────────────────────────────────────
+    # ── Zeit-Logik (Einzelraum) ───────────────────────────────────────────────
 
     def _is_night_for_room(self, room: dict) -> bool:
         """Prüft, ob für einen Raum gerade Nachtzeit ist."""
@@ -83,7 +83,7 @@ class SmartHeatingController:
         return ns <= now < ds
 
     def _target_for_room(self, room: dict) -> float:
-        """Zieltemperatur basierend auf Zeitplan."""
+        """Zieltemperatur basierend auf dem Raum-Zeitplan."""
         if self._is_night_for_room(room):
             return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
         return float(room.get("target_day", DEFAULT_TARGET_DAY))
@@ -95,56 +95,62 @@ class SmartHeatingController:
         if not rooms:
             return
 
-        boost = float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
-        hysterese = 0.5 # Fest auf 0.5 Grad eingestellt
+        boost_delta = 2.0  # +2 Grad Erhöhung
+        hysterese = 0.5    # 0.5 Grad Puffer
         
         needs_heat = {}
-        max_target = 0.0
 
         for rid, room in rooms.items():
             temp = self._room_temp(room)
             target = self._target_for_room(room)
             
-            if target > max_target:
-                max_target = target
-            
             if temp is None:
                 needs_heat[rid] = False
                 continue
 
-            # Hysterese-Logik:
-            # Wir prüfen den aktuellen Zustand des Thermostats
+            # Hysterese-Logik: Prüfen ob das Thermostat gerade heizt
             t_id = room.get("thermostat")
             state = self.hass.states.get(t_id) if t_id else None
             is_heating = False
             if state:
-                # Heizen wir gerade (Soll-Temp > Ziel-Temp)?
                 current_set = state.attributes.get(ATTR_TEMPERATURE, 0)
                 if current_set > target:
                     is_heating = True
 
             if is_heating:
-                # Bleibe im Heizmodus bis Ziel EXAKT erreicht
+                # Heizen bis Ziel exakt erreicht ist
                 needs_heat[rid] = temp < target
             else:
-                # Schalte erst ein bei Ziel - 0.5 Grad
+                # Einschalten erst bei Ziel - 0.5 Grad
                 needs_heat[rid] = temp < (target - hysterese)
 
-        # Hauptthermostat
+        # ── Hauptthermostat Logik ──
         any_cold = any(needs_heat.values())
-        final_main = (max_target + boost) if any_cold else max_target
+        main_id = self.config.get(CONF_MAIN_THERMOSTAT)
+        main_state = self.hass.states.get(main_id) if main_id else None
+        
+        if any_cold and main_state:
+            # BEDARF: Aktuelle Temperatur am Kessel auslesen und +2 Grad addieren
+            main_current_temp = main_state.attributes.get("current_temperature")
+            if main_current_temp is not None:
+                final_main = float(main_current_temp) + boost_delta
+            else:
+                final_main = 24.0 # Not-Fallback
+        else:
+            # KEIN BEDARF: Sofortiger Rücksprung auf 22 Grad Standby
+            final_main = 22.0
+
         self._main_set_temp_if_new(final_main)
 
-        # Einzel-Thermostate
+        # ── Einzel-Thermostate setzen ──
         for rid, room in rooms.items():
             t_id = room.get("thermostat")
             if not t_id:
                 continue
 
             target = self._target_for_room(room)
-            new_val = (target + boost) if needs_heat[rid] else target
-            
-            # Verhindert unnötige Funk-Befehle
+            # Wenn Raum Wärme braucht: Soll + 2 Grad | Wenn warm genug: Genau Sollwert
+            new_val = (target + boost_delta) if needs_heat[rid] else target
             self._set_temp_if_new(t_id, new_val)
 
     # ── Hilfsfunktionen ───────────────────────────────────────────────────────
@@ -161,7 +167,7 @@ class SmartHeatingController:
         except ValueError: return None
 
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Sende nur Befehle, wenn der Wert sich wirklich ändert."""
+        """Sende nur Befehle, wenn der Wert sich wirklich ändert (min. 0.1° Abweichung)."""
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
