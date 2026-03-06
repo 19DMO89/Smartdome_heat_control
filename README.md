@@ -33,7 +33,7 @@ Intelligente Heizungssteuerung für Home Assistant mit **automatischer Raumerken
 
 1. HACS öffnen → **Integrationen**
 2. Oben rechts **⋮ → Benutzerdefinierte Repositorys**
-3. URL eingeben: `https://github.com/19DMO89/smartdome_heating_control`
+3. URL eingeben: `https://github.com/19DMO89/smartdome_heat_control`
    Kategorie: **Integration**
 4. **Hinzufügen** klicken
 5. Integration in der Liste suchen und **Installieren**
