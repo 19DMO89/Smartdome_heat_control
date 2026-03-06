@@ -1,7 +1,7 @@
 {
   "domain": "smartdome_heat_control",
   "name": "Smartdome Heat Control",
-  "version": "1.0.0",
+  "version": "3.1.0",
   "documentation": "https://github.com/your-repo/smart-heating",
   "issue_tracker": "https://github.com/your-repo/smart-heating/issues",
   "dependencies": ["frontend", "http"],
