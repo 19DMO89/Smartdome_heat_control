@@ -1,1 +1,12 @@
-
+{
+  "domain": "smart_heating",
+  "name": "Smart Heating Controller",
+  "version": "3.0.0",
+  "documentation": "https://github.com/your-repo/smart-heating",
+  "issue_tracker": "https://github.com/your-repo/smart-heating/issues",
+  "codeowners": ["@your-github-username"],
+  "requirements": [],
+  "dependencies": [],
+  "iot_class": "local_push",
+  "config_flow": true
+}
