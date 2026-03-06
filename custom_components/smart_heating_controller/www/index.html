@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Smartdome Heat Control Settings</title>
+    <style>
+        body { font-family: Roboto, sans-serif; background-color: #111; color: white; padding: 20px; }
+        .room-card { background: #222; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #444; }
+        .room-header { font-size: 1.5em; margin-bottom: 10px; color: #ff9800; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .setting-group { margin: 10px 0; display: flex; align-items: center; justify-content: space-between; }
+        select, input { background: #333; color: white; border: 1px solid #555; padding: 5px; border-radius: 4px; width: 200px; }
+        button { background: #ff9800; border: none; color: black; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #e68a00; }
+    </style>
+</head>
+<body>
+
+    <h1>Smartdome Heat Control - Einstellungen</h1>
+    <div id="room-container"></div>
+    
+    <button onclick="saveSettings()">Einstellungen Speichern</button>
+
+    <script>
+        // Beispiel-Datenstruktur für Räume
+        const rooms = ["Wohnzimmer", "Schlafzimmer", "Küche", "Bad"];
+        
+        // Diese Funktion würde normalerweise die echten Entitäten von HA abfragen
+        // Wenn als Panel geladen, ist window.parent.hass oft verfügbar
+        const mockEntities = ["climate.living_room", "sensor.room_temp", "switch.heater_pump", "input_number.target_temp"];
+
+        function createRoomCards() {
+            const container = document.getElementById('room-container');
+            rooms.forEach(room => {
+                const card = document.createElement('div');
+                card.className = 'room-card';
+                card.innerHTML = `
+                    <div class="room-header">${room}</div>
+                    <div class="setting-group">
+                        <label>Thermostat auswählen:</label>
+                        <select id="${room}-thermostat">${generateOptions()}</select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Temperatursensor:</label>
+                        <select id="${room}-sensor">${generateOptions()}</select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Ziel-Temperatur:</label>
+                        <input type="number" step="0.5" value="21.0" id="${room}-target">
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function generateOptions() {
+            return mockEntities.map(e => `<option value="${e}">${e}</option>`).join('');
+        }
+
+        function saveSettings() {
+            const settings = {};
+            rooms.forEach(room => {
+                settings[room] = {
+                    thermostat: document.getElementById(`${room}-thermostat`).value,
+                    sensor: document.getElementById(`${room}-sensor`).value,
+                    target: document.getElementById(`${room}-target`).value
+                };
+            });
+            console.log("Speichere Einstellungen:", settings);
+            alert("Einstellungen wurden lokal (Konsole) gespeichert. Für echten HA-Sync ist ein Websocket-Call nötig!");
+        }
+
+        window.onload = createRoomCards;
+    </script>
+</body>
+</html>
