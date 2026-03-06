@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik mit dynamischem Hauptthermostat-Boost."""
+"""Smart Heating Controller – Kernlogik mit 0.5°C Hysterese."""
 from __future__ import annotations
 
 import logging
@@ -32,7 +32,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class SmartHeatingController:
-    """Kernlogik: Dynamischer Hauptthermostat-Boost + 22°C Standby."""
+    """Kernlogik: Einzelraum-Steuerung mit 0.5 Grad Hysterese."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
@@ -40,7 +40,7 @@ class SmartHeatingController:
         self._unsub: list = []
 
     async def async_start(self) -> None:
-        """Listener und minütlichen Check registrieren."""
+        """Listener und Zeitsteuerung registrieren."""
         self._unsubscribe_all()
 
         active_rooms = self._active_rooms()
@@ -51,12 +51,12 @@ class SmartHeatingController:
                 async_track_state_change_event(self.hass, sensors, self._on_temp_change)
             )
 
-        # Überprüft jede Minute Zeitpläne und Hysteresen
+        # Minütlicher Check für Zeitplan-Wechsel
         self._unsub.append(
             async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
 
-        _LOGGER.info("Smart Heating Controller aktiv: Dynamischer Haupt-Boost + 22° Standby")
+        _LOGGER.info("Smart Heating Controller gestartet (Hysterese: 0.5°C)")
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -70,7 +70,7 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    # ── Zeit-Logik (Einzelraum) ───────────────────────────────────────────────
+    # ── Zeit-Logik ────────────────────────────────────────────────────────────
 
     def _is_night_for_room(self, room: dict) -> bool:
         """Prüft, ob für einen Raum gerade Nachtzeit ist."""
@@ -83,7 +83,7 @@ class SmartHeatingController:
         return ns <= now < ds
 
     def _target_for_room(self, room: dict) -> float:
-        """Zieltemperatur basierend auf dem Raum-Zeitplan."""
+        """Zieltemperatur basierend auf Zeitplan."""
         if self._is_night_for_room(room):
             return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
         return float(room.get("target_day", DEFAULT_TARGET_DAY))
@@ -130,14 +130,14 @@ class SmartHeatingController:
         main_state = self.hass.states.get(main_id) if main_id else None
         
         if any_cold and main_state:
-            # BEDARF: Aktuelle Temperatur am Kessel auslesen und +2 Grad addieren
+            # BEDARF: Aktuelle Temperatur am Kessel +2 Grad
             main_current_temp = main_state.attributes.get("current_temperature")
             if main_current_temp is not None:
                 final_main = float(main_current_temp) + boost_delta
             else:
-                final_main = 24.0 # Not-Fallback
+                final_main = 24.0 # Fallback
         else:
-            # KEIN BEDARF: Sofortiger Rücksprung auf 22 Grad Standby
+            # KEIN BEDARF: Rücksprung auf 22 Grad Standby
             final_main = 22.0
 
         self._main_set_temp_if_new(final_main)
@@ -149,8 +149,8 @@ class SmartHeatingController:
                 continue
 
             target = self._target_for_room(room)
-            # Wenn Raum Wärme braucht: Soll + 2 Grad | Wenn warm genug: Genau Sollwert
             new_val = (target + boost_delta) if needs_heat[rid] else target
+            
             self._set_temp_if_new(t_id, new_val)
 
     # ── Hilfsfunktionen ───────────────────────────────────────────────────────
@@ -167,20 +167,14 @@ class SmartHeatingController:
         except ValueError: return None
 
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Sende nur Befehle, wenn der Wert sich wirklich ändert (min. 0.1° Abweichung)."""
+        """Sende nur Befehle, wenn der Wert sich wirklich ändert."""
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
-            # Hier war der Fehler: Wir prüfen auf eine Differenz kleiner als 0.1
-            if current is not None and abs(current - temp) < 0.1:
-                return 
-        
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                CLIMATE_DOMAIN, "set_temperature",
-                {"entity_id": entity_id, ATTR_TEMPERATURE: round(temp, 1)},
-            )
-        )
+            # KORREKTUR DER ZEILE 174:
+            if current is not None and abs(float(current) - float(temp))  None:
+        main = self.config.get(CONF_MAIN_THERMOSTAT)
+        if main: self._set_temp_if_new(main, temp)
 
     # ── Event-Handler ─────────────────────────────────────────────────────────
 
