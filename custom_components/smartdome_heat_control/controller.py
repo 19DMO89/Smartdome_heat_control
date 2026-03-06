@@ -60,7 +60,7 @@ class SmartHeatingController:
             async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
 
-        _LOGGER.info("Smart Heating Controller aktiv: Überwachungskreis für %s Entitäten erstellt", len(watch_list))
+        _LOGGER.info("Smart Heating Controller aktiv: Überwachung von %s Entitäten", len(watch_list))
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -74,23 +74,21 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    # ── Zielwert-Logik (Berücksichtigt UI) ──────────────────────────────────
+    # ── Zielwert-Logik ───────────────────────────────────────────────────────
 
     def _target_for_room(self, room: dict) -> float:
         """Ermittelt die Zieltemperatur (Priorität: UI-Einstellung)."""
         t_id = room.get("thermostat")
         state = self.hass.states.get(t_id) if t_id else None
         
-        # Wenn in der UI ein Wert gesetzt wurde, nehmen wir diesen
         if state and ATTR_TEMPERATURE in state.attributes:
             try:
                 ui_temp = float(state.attributes[ATTR_TEMPERATURE])
-                if ui_temp > 0: # Plausibilitätscheck
+                if ui_temp > 0:
                     return ui_temp
             except (ValueError, TypeError):
                 pass
 
-        # Fallback auf Zeitplan (Config)
         if self._is_night_for_room(room):
             return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
         return float(room.get("target_day", DEFAULT_TARGET_DAY))
@@ -123,12 +121,10 @@ class SmartHeatingController:
                 needs_heat[rid] = False
                 continue
 
-            # Harte Abschaltung bei Erreichen der Zieltemperatur
             if temp >= target:
                 needs_heat[rid] = False
                 continue
 
-            # Einschaltlogik mit Hysterese
             needs_heat[rid] = temp < (target - hysterese)
 
         # ── Hauptthermostat Logik ──
@@ -144,7 +140,7 @@ class SmartHeatingController:
 
         self._main_set_temp_if_new(final_main)
 
-        # ── Einzel-Thermostate setzen (Boost-Logik) ──
+        # ── Einzel-Thermostate setzen ──
         for rid, room in rooms.items():
             t_id = room.get("thermostat")
             if not t_id: continue
@@ -152,8 +148,6 @@ class SmartHeatingController:
             target = self._target_for_room(room)
             temp = self._room_temp(room)
             
-            # Wenn Wärme gebraucht wird: Setze Ziel + Boost (damit das Ventil voll öffnet)
-            # Wenn warm genug: Setze exakten Zielwert (Ventil drosselt)
             if needs_heat[rid]:
                 new_val = target + boost_delta
             else:
@@ -175,16 +169,17 @@ class SmartHeatingController:
         except ValueError: return None
 
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
+        """Sende nur Befehle, wenn der Wert sich wirklich unterscheidet."""
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
             if current is not None and abs(float(current) - float(temp))  None:
         main = self.config.get(CONF_MAIN_THERMOSTAT)
-        if main: self._set_temp_if_new(main, temp)
+        if main:
+            self._set_temp_if_new(main, temp)
 
     @callback
     def _on_state_change(self, event) -> None:
-        """Wird ausgelöst bei Sensor- ODER UI-Änderungen."""
         self._evaluate()
 
     @callback
