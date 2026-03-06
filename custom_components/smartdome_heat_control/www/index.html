@@ -2,282 +2,122 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smartdome Heat Control</title>
     <style>
         :root {
-            --primary: #ff9800;
-            --bg: #111111;
-            --card-bg: #1c1c1e;
-            --section-bg: #252527;
-            --text: #ffffff;
-            --secondary-text: #a0a0a2;
-            --accent: #03a9f4;
-            --danger: #ff5252;
-            --heating: #ff5722;
+            --primary: #ff9800; --bg: #111; --card-bg: #1c1c1e;
+            --text: #fff; --accent: #03a9f4; --heating: #ff5722;
         }
-
-        body { 
-            font-family: 'Segoe UI', Roboto, sans-serif; 
-            background-color: var(--bg); color: var(--text); 
-            margin: 0; padding: 20px;
-            display: flex; flex-direction: column; align-items: center;
-        }
-
-        .header {
-            width: 100%; max-width: 1000px;
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px;
-        }
-
-        .header h1 { margin: 0; font-weight: 300; display: flex; align-items: center; gap: 12px; }
-        .header img { height: 40px; border-radius: 5px; }
-
-        .config-section {
-            width: 100%; max-width: 1000px;
-            background: var(--section-bg);
-            border-radius: 16px; padding: 20px; margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            border: 1px solid #333;
-        }
-
-        .section-title { font-size: 1.1em; font-weight: bold; margin-bottom: 15px; color: var(--accent); display: flex; align-items: center; justify-content: space-between; }
-
-        .controls-bar {
-            width: 100%; max-width: 1000px;
-            display: flex; gap: 15px; margin-bottom: 20px; align-items: center;
-        }
-
-        .search-input { flex: 2; }
-        .sort-select { flex: 1; }
-
-        #room-container {
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px; width: 100%; max-width: 1000px; padding-bottom: 120px;
-        }
-
-        .room-card {
-            background: var(--card-bg);
-            border-radius: 16px; padding: 20px;
-            border: 1px solid #333; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-            transition: all 0.3s ease; position: relative;
-        }
-
-        .room-card.disabled { opacity: 0.5; filter: grayscale(0.6); }
-
-        .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .room-title { font-weight: 600; color: var(--primary); font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
-
-        /* Flammen-Animation */
-        .heating-icon {
-            color: var(--heating);
-            font-size: 1.2em;
-            animation: pulse-fire 1.5s infinite alternate;
-            filter: drop-shadow(0 0 5px var(--heating));
-        }
-
-        @keyframes pulse-fire {
-            from { transform: scale(1); opacity: 0.7; }
-            to { transform: scale(1.2); opacity: 1; }
-        }
-
-        /* Switch UI */
-        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--primary); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        .setting-row { margin-bottom: 12px; }
-        .setting-row label { display: block; font-size: 0.8em; color: var(--secondary-text); margin-bottom: 4px; }
-
-        select, input {
-            width: 100%; background: #2c2c2e; color: white;
-            border: 1px solid #444; padding: 10px; border-radius: 8px;
-            font-size: 0.9em; box-sizing: border-box; outline: none;
-        }
+        body { font-family: Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; }
         
-        select:focus, input:focus { border-color: var(--primary); }
+        .header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
+        .stats-bar { width: 100%; max-width: 1000px; margin-bottom: 20px; display: flex; gap: 20px; font-size: 0.9em; color: var(--accent); }
 
-        .temp-row { display: flex; gap: 10px; }
+        .config-section { width: 100%; max-width: 1000px; background: #252527; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #333; }
+        .global-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
 
-        .save-bar {
-            position: fixed; bottom: 0; left: 0;
-            width: 100%; display: flex; justify-content: center;
-            padding: 30px 0; background: linear-gradient(transparent, var(--bg) 50%);
-            pointer-events: none; z-index: 100;
-        }
+        #room-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; padding-bottom: 100px; }
+        .room-card { background: var(--card-bg); border-radius: 12px; padding: 20px; border: 1px solid #333; position: relative; }
+        .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        
+        /* Styling für die HA Picker */
+        ha-entity-picker { display: block; margin-bottom: 15px; --ha-card-background: #2c2c2e; }
+        
+        .temp-row { display: flex; gap: 10px; margin-top: 10px; }
+        input[type="number"], input { background: #2c2c2e; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 4px; width: 100%; }
 
-        .save-btn {
-            pointer-events: auto;
-            background: var(--primary); color: #000;
-            border: none; padding: 14px 60px; border-radius: 30px;
-            font-weight: bold; cursor: pointer; font-size: 1.1em;
-            box-shadow: 0 10px 30px rgba(255, 152, 0, 0.4);
-            transition: all 0.2s;
-        }
-        .save-btn:hover { transform: scale(1.05); background: #ffa726; }
-
-        .remove-link { color: var(--danger); font-size: 0.75em; cursor: pointer; text-decoration: underline; margin-top: 15px; display: block; text-align: right; opacity: 0.7; }
+        .save-bar { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: center; pointer-events: none; }
+        .save-btn { pointer-events: auto; background: var(--primary); border: none; padding: 15px 60px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 20px rgba(255,152,0,0.4); }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1><img src="/smartdome_ui/icon.png" onerror="this.style.display='none'"> Smartdome Heat</h1>
-        <div style="font-size: 0.8em; color: var(--secondary-text);">v1.1.5</div>
+        <h1>Smartdome Heat</h1>
+        <div id="stats" class="stats-bar">Lade Status...</div>
     </div>
 
     <div class="config-section">
-        <div class="section-title">⚙️ Haupteinstellungen</div>
+        <div style="margin-bottom:10px; font-weight:bold; color:var(--primary)">⚙️ Haupteinstellungen</div>
         <div class="global-grid">
-            <div class="setting-row">
-                <label>Zentrales Hauptthermostat</label>
-                <select id="main_thermostat" onchange="updateGlobal('main_thermostat', this.value)"></select>
+            <div>
+                <label style="font-size:0.8em">Hauptthermostat</label>
+                
             </div>
-            <div class="setting-row">
-                <label>Nacht-Start</label>
-                <input type="text" id="night_start" placeholder="22:00" onchange="updateGlobal('night_start', this.value)">
-            </div>
-            <div class="setting-row">
-                <label>Boost-Start</label>
-                <input type="text" id="morning_boost_start" placeholder="05:00" onchange="updateGlobal('morning_boost_start', this.value)">
-            </div>
-            <div class="setting-row">
-                <label>Boost-Ende</label>
-                <input type="text" id="morning_boost_end" placeholder="06:00" onchange="updateGlobal('morning_boost_end', this.value)">
-            </div>
+            <div><label style="font-size:0.8em">Nacht-Start</label><input type="text" id="night_start"></div>
+            <div><label style="font-size:0.8em">Boost-Start</label><input type="text" id="boost_start"></div>
         </div>
-    </div>
-
-    <div class="controls-bar">
-        <input type="text" id="search-input" class="search-input" placeholder="🔍 Räume suchen..." oninput="renderRooms()">
-        <select id="sort-select" class="sort-select" onchange="renderRooms()">
-            <option value="name">Sortieren: A-Z</option>
-            <option value="status">Sortieren: Aktiv zuerst</option>
-            <option value="heat">Sortieren: Heizen zuerst</option>
-        </select>
     </div>
 
     <div id="room-container"></div>
 
-    <div class="save-bar">
-        <button class="save-btn" onclick="saveToHA()">Konfiguration Speichern</button>
-    </div>
+    <div class="save-bar"><button class="save-btn" onclick="saveToHA()">Konfiguration Speichern</button></div>
 
     <script>
-        let currentConfig = {};
         const hass = window.parent.document.querySelector("home-assistant").hass;
+        let currentConfig = {};
 
         function init() {
             if (!hass) return;
             const state = hass.states["smartdome_heat_control.config"];
-            if (state && state.attributes) {
+            if (state) {
                 currentConfig = JSON.parse(JSON.stringify(state.attributes));
-                loadGlobalFields();
+                setupGlobal();
                 renderRooms();
+                updateStats();
             }
         }
 
-        // Prüft, ob ein Raum gerade heizt
-        function isHeating(thermostatId) {
-            if (!thermostatId || !hass.states[thermostatId]) return false;
-            const state = hass.states[thermostatId];
-            // Prüfe auf hvac_action oder ob Soll > Ist
-            const action = state.attributes.hvac_action;
-            if (action === 'heating') return true;
+        function setupGlobal() {
+            const picker = document.getElementById('main_thermostat_picker');
+            picker.hass = hass;
+            picker.value = currentConfig.main_thermostat;
+            picker.addEventListener('value-changed', (ev) => { currentConfig.main_thermostat = ev.detail.value; });
             
-            const target = state.attributes.temperature;
-            const current = state.attributes.current_temperature;
-            return target > current;
-        }
-
-        function loadGlobalFields() {
-            const mainSel = document.getElementById('main_thermostat');
-            mainSel.innerHTML = '<option value="">Auswählen...</option>';
-            Object.keys(hass.states).filter(e => e.startsWith('climate.')).sort().forEach(ent => {
-                const opt = document.createElement('option');
-                opt.value = ent; opt.text = ent;
-                if (ent === currentConfig.main_thermostat) opt.selected = true;
-                mainSel.add(opt);
-            });
-            document.getElementById('night_start').value = currentConfig.night_start || "";
-            document.getElementById('morning_boost_start').value = currentConfig.morning_boost_start || "";
-            document.getElementById('morning_boost_end').value = currentConfig.morning_boost_end || "";
+            document.getElementById('night_start').value = currentConfig.night_start;
+            document.getElementById('boost_start').value = currentConfig.morning_boost_start;
         }
 
         function renderRooms() {
             const container = document.getElementById('room-container');
-            const searchTerm = document.getElementById('search-input').value.toLowerCase();
-            const sortBy = document.getElementById('sort-select').value;
-            
             container.innerHTML = "";
-            let roomsArray = Object.entries(currentConfig.rooms || {});
-
-            roomsArray = roomsArray.filter(([id, data]) => (data.label || id).toLowerCase().includes(searchTerm));
-
-            roomsArray.sort((a, b) => {
-                if (sortBy === "name") return (a.label || a).localeCompare(b.label || b);
-                if (sortBy === "heat") return isHeating(b.thermostat) - isHeating(a.thermostat);
-                return (b.enabled !== false) - (a.enabled !== false);
-            });
-
-            const entities = Object.keys(hass.states).sort();
-
-            roomsArray.forEach(([roomId, data]) => {
-                const isEnabled = data.enabled !== false;
-                const heating = isHeating(data.thermostat);
+            Object.entries(currentConfig.rooms).forEach(([id, room]) => {
                 const card = document.createElement('div');
-                card.className = `room-card ${isEnabled ? '' : 'disabled'}`;
+                card.className = 'room-card';
                 card.innerHTML = `
-                    <div class="room-header">
-                        <span class="room-title">
-                            ${data.label || roomId}
-                            ${heating && isEnabled ? '<span class="heating-icon">🔥</span>' : ''}
-                        </span>
-                        <label class="switch">
-                            <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleRoom('${roomId}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <label>Thermostat</label>
-                        <select onchange="updateRoom('${roomId}', 'thermostat', this.value)" ${isEnabled ? '' : 'disabled'}>
-                            <option value="">Keines</option>
-                            ${entities.filter(e => e.startsWith('climate.')).map(e => `<option value="${e}" ${e === data.thermostat ? 'selected' : ''}>${e}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="setting-row">
-                        <label>Temperatursensor</label>
-                        <select onchange="updateRoom('${roomId}', 'sensor', this.value)" ${isEnabled ? '' : 'disabled'}>
-                            <option value="">Keiner</option>
-                            ${entities.filter(e => e.startsWith('sensor.')).map(e => `<option value="${e}" ${e === data.sensor ? 'selected' : ''}>${e}</option>`).join('')}
-                        </select>
-                    </div>
+                    <div class="room-header"><b style="color:var(--primary)">${room.label || id}</b></div>
+                    <label style="font-size:0.7em">Thermostat</label>
+                    
+                    <label style="font-size:0.7em">Sensor</label>
+                    
                     <div class="temp-row">
-                        <div class="setting-row" style="flex:1"><label>Tag (°C)</label><input type="number" step="0.5" value="${data.target_day}" onchange="updateRoom('${roomId}', 'target_day', parseFloat(this.value))" ${isEnabled ? '' : 'disabled'}></div>
-                        <div class="setting-row" style="flex:1"><label>Nacht (°C)</label><input type="number" step="0.5" value="${data.target_night}" onchange="updateRoom('${roomId}', 'target_night', parseFloat(this.value))" ${isEnabled ? '' : 'disabled'}></div>
+                        <input type="number" step="0.5" value="${room.target_day}" onchange="currentConfig.rooms['${id}'].target_day=this.value">
+                        <input type="number" step="0.5" value="${room.target_night}" onchange="currentConfig.rooms['${id}'].target_night=this.value">
                     </div>
-                    <span class="remove-link" onclick="removeRoomFromUI('${roomId}')">Diesen Raum entfernen</span>
                 `;
                 container.appendChild(card);
+                
+                // Picker mit HA verbinden
+                const tPicker = card.querySelector('.room-thermostat');
+                const sPicker = card.querySelector('.room-sensor');
+                tPicker.hass = sPicker.hass = hass;
+                tPicker.value = room.thermostat;
+                sPicker.value = room.sensor;
+                
+                tPicker.addEventListener('value-changed', (ev) => { currentConfig.rooms[id].thermostat = ev.detail.value; });
+                sPicker.addEventListener('value-changed', (ev) => { currentConfig.rooms[id].sensor = ev.detail.value; });
             });
         }
 
-        function toggleRoom(id, state) { currentConfig.rooms[id].enabled = state; renderRooms(); }
-        function removeRoomFromUI(id) {
-            if(confirm(`Raum '${currentConfig.rooms[id].label || id}' entfernen?`)) { delete currentConfig.rooms[id]; renderRooms(); }
+        function updateStats() {
+            const total = Object.keys(currentConfig.rooms).length;
+            const heating = Object.values(hass.states).filter(s => s.entity_id.startsWith('climate.') && s.attributes.hvac_action === 'heating').length;
+            document.getElementById('stats').innerHTML = `🏠 Räume: ${total} | 🔥 Aktiv am Heizen: ${heating}`;
         }
-        function updateGlobal(key, val) { currentConfig[key] = val; }
-        function updateRoom(id, key, val) { currentConfig.rooms[id][key] = val; }
 
         async function saveToHA() {
-            try {
-                await hass.callWS({ type: "smartdome_heat_control/save_config", config: currentConfig });
-                alert("Smartdome Heat Control: Einstellungen gespeichert!");
-            } catch (err) { alert("Fehler: " + err.message); }
+            await hass.callWS({ type: "smartdome_heat_control/save_config", config: currentConfig });
+            alert("Gespeichert!");
         }
 
         window.onload = init;
