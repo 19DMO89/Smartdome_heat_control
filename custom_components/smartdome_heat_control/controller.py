@@ -120,9 +120,14 @@ class SmartHeatingController:
 
     def _is_night(self) -> bool:
         now = datetime.now().strftime("%H:%M")
-        ns  = self.config.get(CONF_NIGHT_START,         DEFAULT_NIGHT_START)
-        mb  = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
-        return now >= ns or now < mb
+        ns  = self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)[:5]
+        mb  = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)[:5]
+        
+        if ns > mb: # Normalfall: Nacht geht über Mitternacht (z.B. 22:00 bis 06:00)
+            return now >= ns or now < mb
+        else: # Sonderfall: Nacht liegt innerhalb eines Tages
+            return ns <= now < mb
+
 
     def _is_morning_boost(self) -> bool:
         now      = datetime.now().strftime("%H:%M")
