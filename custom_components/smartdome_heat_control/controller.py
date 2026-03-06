@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik."""
+"""Smart Heating Controller – Kernlogik mit Einzelraum-Zeitplänen."""
 from __future__ import annotations
 
 import logging
@@ -28,43 +28,37 @@ from .const import (
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
     DEFAULT_TOLERANCE,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class SmartHeatingController:
-    """Kernlogik: Temperaturüberwachung und Thermostatsteuerung."""
+    """Kernlogik: Einzelraum-Steuerung und Zeitpläne."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
-        self.hass   = hass
+        self.hass = hass
         self.config = config
         self._unsub: list = []
-
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def async_start(self) -> None:
         """Listener und Zeitsteuerung registrieren."""
         self._unsubscribe_all()
 
-        sensors = [
-            room["sensor"]
-            for room in self._active_rooms().values()
-            if room.get("sensor")
-        ]
+        active_rooms = self._active_rooms()
+        sensors = [r["sensor"] for r in active_rooms.values() if r.get("sensor")]
+        
         if sensors:
             self._unsub.append(
                 async_track_state_change_event(self.hass, sensors, self._on_temp_change)
             )
 
-        self._register_time(CONF_NIGHT_START,         DEFAULT_NIGHT_START,         self._on_night_start)
-        self._register_time(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START, self._on_morning_boost)
-        self._register_time(CONF_MORNING_BOOST_END,   DEFAULT_MORNING_BOOST_END,   self._on_day_start)
-
-        _LOGGER.info(
-            "Smart Heating gestartet. Räume: %s | Sensoren: %s",
-            list(self._active_rooms().keys()), sensors,
+        # Wir prüfen jede Minute, ob ein Raum den Modus (Tag/Nacht) wechseln muss
+        self._unsub.append(
+            async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
+
+        _LOGGER.info("Smart Heating Controller gestartet (Einzelraum-Modus aktiv)")
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -78,122 +72,94 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    def _register_time(self, cfg_key: str, default: str, fn) -> None:
-        t = self.config.get(cfg_key, default)
-        try:
-            # Trenne den String und nimm nur die ersten beiden Teile (H und M)
-            parts = t.split(":")
-            h = int(parts[0])
-            m = int(parts[1])
-        except (ValueError, AttributeError, IndexError):
-            _LOGGER.warning("Smart Heating: Ungültige Zeit für '%s': %s (Nutze Default)", cfg_key, t)
-            # Fallback auf Default, falls der String komplett kaputt ist
-            try:
-                h, m = map(int, default.split(":")[:2])
-            except:
-                h, m = 18, 0 # Absoluter Notfall-Fallback
-        
-        self._unsub.append(
-            async_track_time_change(self.hass, fn, hour=h, minute=m, second=0)
-        )
+    # ── Zeit-Logik ────────────────────────────────────────────────────────────
 
+    def _is_night_for_room(self, room: dict) -> bool:
+        """Prüft, ob für einen spezifischen Raum gerade Nachtzeit ist."""
+        now = datetime.now().strftime("%H:%M")
+        
+        # Raum-Zeiten laden (Fallback auf globale Defaults)
+        ns = str(room.get("night_start", self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)))[:5]
+        ds = str(room.get("day_start", self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)))[:5]
+        
+        if ns > ds:  # Nacht geht über Mitternacht (z.B. 22:00 bis 06:00)
+            return now >= ns or now < ds
+        return ns <= now < ds # Nacht liegt im selben Tag (z.B. 08:00 bis 16:00)
+
+    def _target_for_room(self, room: dict) -> float:
+        """Gibt die aktuell gültige Zieltemperatur für den Raum zurück."""
+        if self._is_night_for_room(room):
+            return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
+        return float(room.get("target_day", DEFAULT_TARGET_DAY))
+
+    # ── Steuerung ─────────────────────────────────────────────────────────────
+
+    def _evaluate(self) -> None:
+        rooms = self._active_rooms()
+        if not rooms:
+            return
+
+        boost = float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
+        tol   = float(self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
+        
+        needs_heat = {}
+        max_target = 0.0
+
+        for rid, room in rooms.items():
+            temp = self._room_temp(room)
+            target = self._target_for_room(room)
+            
+            # Höchstes Ziel für Hauptthermostat finden
+            if target > max_target:
+                max_target = target
+            
+            # Bedarf ermitteln
+            needs_heat[rid] = (temp is not None and temp < (target - tol))
+
+        # Hauptthermostat setzen
+        any_cold = any(needs_heat.values())
+        final_main_temp = (max_target + boost) if any_cold else max_target
+        self._main_set_temp(final_main_temp)
+
+        # Einzel-Thermostate setzen
+        for rid, room in rooms.items():
+            thermostat = room.get("thermostat")
+            if not thermostat:
+                continue
+
+            target = self._target_for_room(room)
+            
+            if needs_heat[rid]:
+                # Raum braucht Wärme -> voll auf (Soll + Boost)
+                self._set_temp(thermostat, target + boost)
+            else:
+                # Raum warm genug -> Exakt auf Zieltemperatur (Nachtabsenkung erzwingen)
+                self._set_temp(thermostat, target)
 
     # ── Hilfsfunktionen ───────────────────────────────────────────────────────
 
     def _active_rooms(self) -> dict:
-        return {
-            k: v for k, v in self.config.get(CONF_ROOMS, {}).items()
-            if v.get("enabled", True)
-        }
+        return {k: v for k, v in self.config.get(CONF_ROOMS, {}).items() if v.get("enabled", True)}
 
     def _room_temp(self, room: dict) -> float | None:
         sensor = room.get("sensor")
-        if not sensor:
-            return None
+        if not sensor: return None
         state = self.hass.states.get(sensor)
-        if not state or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return None
-        try:
-            return float(state.state)
-        except ValueError:
-            return None
-
-    def _is_night(self) -> bool:
-        now = datetime.now().strftime("%H:%M")
-        ns  = self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)[:5]
-        mb  = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)[:5]
-        
-        if ns > mb: # Normalfall: Nacht geht über Mitternacht (z.B. 22:00 bis 06:00)
-            return now >= ns or now < mb
-        else: # Sonderfall: Nacht liegt innerhalb eines Tages
-            return ns <= now < mb
-
-
-    def _is_morning_boost(self) -> bool:
-        now      = datetime.now().strftime("%H:%M")
-        mb_start = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
-        mb_end   = self.config.get(CONF_MORNING_BOOST_END,   DEFAULT_MORNING_BOOST_END)
-        return mb_start <= now < mb_end
-
-    def _target(self, room: dict) -> float:
-        if self._is_night() and not self._is_morning_boost():
-            return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
-        return float(room.get("target_day", DEFAULT_TARGET_DAY))
+        if not state or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN): return None
+        try: return float(state.state)
+        except ValueError: return None
 
     def _set_temp(self, entity_id: str, temp: float) -> None:
-        if not entity_id:
-            return
         self.hass.async_create_task(
             self.hass.services.async_call(
-                CLIMATE_DOMAIN,
-                "set_temperature",
+                CLIMATE_DOMAIN, "set_temperature",
                 {"entity_id": entity_id, ATTR_TEMPERATURE: round(temp, 1)},
             )
         )
 
     def _main_set_temp(self, temp: float) -> None:
-        main = self.config.get(CONF_MAIN_THERMOSTAT, "")
-        if main:
-            self._set_temp(main, temp)
-
-    # ── Kernlogik ─────────────────────────────────────────────────────────────
-
-    def _evaluate(self) -> None:
-        rooms   = self._active_rooms()
-        boost   = float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
-        tol     = float(self.config.get(CONF_TOLERANCE,   DEFAULT_TOLERANCE))
-
-        if not rooms:
-            return
-
-        needs_heat: dict[str, bool] = {}
-        for key, room in rooms.items():
-            temp   = self._room_temp(room)
-            target = self._target(room)
-            needs_heat[key] = temp is not None and temp < (target - tol)
-
-        any_cold   = any(needs_heat.values())
-        max_target = max(self._target(r) for r in rooms.values())
-
-        if any_cold:
-            self._main_set_temp(max_target + boost)
-            for key, room in rooms.items():
-                thermostat = room.get("thermostat", "")
-                if not thermostat:
-                    continue
-                target = self._target(room)
-                if needs_heat[key]:
-                    self._set_temp(thermostat, target + boost)
-                    _LOGGER.debug("Raum %s zu kalt, öffne Ventil auf %.1f°", key, target + boost)
-                else:
-                    temp      = self._room_temp(room) or target
-                    throttled = max(temp - 1.0, target - 2.0)
-                    self._set_temp(thermostat, throttled)
-        else:
-            self._main_set_temp(max_target)
-            for room in rooms.values():
-                if room.get("thermostat"):
-                    self._set_temp(room["thermostat"], self._target(room))
+        main = self.config.get(CONF_MAIN_THERMOSTAT)
+        if main: self._set_temp(main, temp)
 
     # ── Event-Handler ─────────────────────────────────────────────────────────
 
@@ -202,38 +168,6 @@ class SmartHeatingController:
         self._evaluate()
 
     @callback
-    def _on_night_start(self, now) -> None:
-        rooms = self._active_rooms()
-        if not rooms:
-            return
-        min_night = min(float(r.get("target_night", DEFAULT_TARGET_NIGHT)) for r in rooms.values())
-        self._main_set_temp(min_night)
-        for room in rooms.values():
-            if room.get("thermostat"):
-                self._set_temp(room["thermostat"], float(room.get("target_night", DEFAULT_TARGET_NIGHT)))
-        _LOGGER.info("Smart Heating: Nachtmodus aktiviert")
-
-    @callback
-    def _on_morning_boost(self, now) -> None:
-        rooms = self._active_rooms()
-        if not rooms:
-            return
-        boost      = float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
-        max_target = max(float(r.get("target_day", DEFAULT_TARGET_DAY)) for r in rooms.values())
-        self._main_set_temp(max_target + boost)
-        for room in rooms.values():
-            if room.get("thermostat"):
-                self._set_temp(room["thermostat"], float(room.get("target_day", DEFAULT_TARGET_DAY)))
-        _LOGGER.info("Smart Heating: Morgen-Boost aktiv")
-
-    @callback
-    def _on_day_start(self, now) -> None:
-        rooms = self._active_rooms()
-        if not rooms:
-            return
-        max_target = max(float(r.get("target_day", DEFAULT_TARGET_DAY)) for r in rooms.values())
-        self._main_set_temp(max_target)
-        for room in rooms.values():
-            if room.get("thermostat"):
-                self._set_temp(room["thermostat"], float(room.get("target_day", DEFAULT_TARGET_DAY)))
-        _LOGGER.info("Smart Heating: Tagbetrieb aktiv")
+    def _on_minute_tick(self, now) -> None:
+        """Prüft minütlich, ob ein Raum in den Nacht/Tag Modus gewechselt ist."""
+        self._evaluate()
