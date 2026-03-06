@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik mit 0.5°C Hysterese."""
+"""Smart Heating Controller – Kernlogik mit harter Sicherheits-Abschaltung."""
 from __future__ import annotations
 
 import logging
@@ -32,7 +32,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class SmartHeatingController:
-    """Kernlogik: Einzelraum-Steuerung mit 0.5 Grad Hysterese."""
+    """Kernlogik: Verhindert Überheizen durch strikte Zielwert-Prüfung."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
@@ -51,12 +51,12 @@ class SmartHeatingController:
                 async_track_state_change_event(self.hass, sensors, self._on_temp_change)
             )
 
-        # Minütlicher Check für Zeitplan-Wechsel
+        # Prüft jede Minute auf Zeitplan-Wechsel
         self._unsub.append(
             async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
 
-        _LOGGER.info("Smart Heating Controller gestartet (Hysterese: 0.5°C)")
+        _LOGGER.info("Smart Heating Controller aktiv: Sicherheits-Abschaltung bei Zieltemperatur")
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -70,7 +70,7 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    # ── Zeit-Logik ────────────────────────────────────────────────────────────
+    # ── Zeit-Logik (Einzelraum) ───────────────────────────────────────────────
 
     def _is_night_for_room(self, room: dict) -> bool:
         """Prüft, ob für einen Raum gerade Nachtzeit ist."""
@@ -96,7 +96,7 @@ class SmartHeatingController:
             return
 
         boost_delta = 2.0  # +2 Grad Erhöhung
-        hysterese = 0.5    # 0.5 Grad Puffer
+        hysterese = 0.5    # Einschalt-Puffer
         
         needs_heat = {}
 
@@ -108,20 +108,26 @@ class SmartHeatingController:
                 needs_heat[rid] = False
                 continue
 
-            # Hysterese-Logik: Prüfen ob das Thermostat gerade heizt
+            # --- HARTE ABSCHALTUNG ---
+            # Wenn Ist-Temperatur >= Soll-Temperatur, dann Heizen SOFORT beenden
+            if temp >= target:
+                needs_heat[rid] = False
+                continue
+
+            # Hysterese-Logik für den Einschaltvorgang
             t_id = room.get("thermostat")
             state = self.hass.states.get(t_id) if t_id else None
-            is_heating = False
+            is_currently_boosted = False
             if state:
                 current_set = state.attributes.get(ATTR_TEMPERATURE, 0)
                 if current_set > target:
-                    is_heating = True
+                    is_currently_boosted = True
 
-            if is_heating:
-                # Heizen bis Ziel exakt erreicht ist
+            if is_currently_boosted:
+                # Wir heizen gerade -> weiterheizen bis Ziel erreicht (temp < target)
                 needs_heat[rid] = temp < target
             else:
-                # Einschalten erst bei Ziel - 0.5 Grad
+                # Wir halten Temperatur -> erst einschalten wenn 0.5 Grad zu kalt
                 needs_heat[rid] = temp < (target - hysterese)
 
         # ── Hauptthermostat Logik ──
@@ -130,14 +136,14 @@ class SmartHeatingController:
         main_state = self.hass.states.get(main_id) if main_id else None
         
         if any_cold and main_state:
-            # BEDARF: Aktuelle Temperatur am Kessel +2 Grad
-            main_current_temp = main_state.attributes.get("current_temperature")
-            if main_current_temp is not None:
-                final_main = float(main_current_temp) + boost_delta
+            # BEDARF: Kessel auf Ist-Temperatur + 2 Grad
+            main_current = main_state.attributes.get("current_temperature")
+            if main_current is not None:
+                final_main = float(main_current) + boost_delta
             else:
                 final_main = 24.0 # Fallback
         else:
-            # KEIN BEDARF: Rücksprung auf 22 Grad Standby
+            # KEIN BEDARF: Sofort auf 22 Grad zurück
             final_main = 22.0
 
         self._main_set_temp_if_new(final_main)
@@ -149,7 +155,15 @@ class SmartHeatingController:
                 continue
 
             target = self._target_for_room(room)
-            new_val = (target + boost_delta) if needs_heat[rid] else target
+            temp = self._room_temp(room)
+            
+            # WICHTIG: Wenn Raum warm genug (>= target), dann Ventil auf Zielwert drosseln
+            if temp is not None and temp >= target:
+                new_val = target
+            elif needs_heat[rid]:
+                new_val = target + boost_delta
+            else:
+                new_val = target
             
             self._set_temp_if_new(t_id, new_val)
 
@@ -172,17 +186,10 @@ class SmartHeatingController:
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
             if current is not None:
-                # Wir berechnen die Differenz in zwei Schritten
                 diff = abs(float(current) - float(temp))
-                if diff < 0.1:
-                    return 
-        
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                CLIMATE_DOMAIN, "set_temperature",
-                {"entity_id": entity_id, ATTR_TEMPERATURE: round(temp, 1)},
-            )
-        )
+                if diff  None:
+        main = self.config.get(CONF_MAIN_THERMOSTAT)
+        if main: self._set_temp_if_new(main, temp)
 
     # ── Event-Handler ─────────────────────────────────────────────────────────
 
