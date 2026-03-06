@@ -109,7 +109,7 @@ Andere Ventile  = gedrosselt
 ## 📱 Lovelace-Karte
 
 Die passende Dashboard-Karte ist als separates Repository verfügbar:
-👉 **[smart-heating-card](https://github.com/DEIN-USERNAME/smart-heating-card)**
+👉 **[smart-heating-card](https://github.com/19DMO89/smart-heating-card)**
 
 ---
 
