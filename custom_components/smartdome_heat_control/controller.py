@@ -172,7 +172,7 @@ class SmartHeatingController:
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
             # KORREKTUR DER ZEILE 174:
-            if current is not None and abs(float(current) - float(temp))  None:
+            if current is not None and abs(float(current) - float(temp)) < 0.1:
         main = self.config.get(CONF_MAIN_THERMOSTAT)
         if main: self._set_temp_if_new(main, temp)
 
