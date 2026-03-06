@@ -1,0 +1,85 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Heating einrichten",
+        "description": "Wähle deinen Hauptthermostat und die globalen Einstellungen.",
+        "data": {
+          "main_thermostat":      "Hauptthermostat",
+          "boost_delta":          "Boost-Delta (°C)",
+          "tolerance":            "Toleranz (°C)",
+          "night_start":          "Nachtmodus beginnt",
+          "morning_boost_start":  "Morgen-Boost startet",
+          "morning_boost_end":    "Tagbetrieb beginnt"
+        }
+      },
+      "rooms": {
+        "title": "Erkannte Räume",
+        "description": "Es wurden **{room_count}** Räume automatisch erkannt:\n\n{room_names}\n\nDu kannst Räume danach jederzeit über die Integrationseinstellungen bearbeiten.",
+        "data": {
+          "confirm": "Räume übernehmen"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Smart Heating ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating – Einstellungen",
+        "data": {
+          "action": "Was möchtest du tun?"
+        }
+      },
+      "global": {
+        "title": "Globale Einstellungen",
+        "data": {
+          "main_thermostat":      "Hauptthermostat",
+          "boost_delta":          "Boost-Delta (°C)",
+          "tolerance":            "Toleranz (°C)",
+          "night_start":          "Nachtmodus beginnt",
+          "morning_boost_start":  "Morgen-Boost startet",
+          "morning_boost_end":    "Tagbetrieb beginnt"
+        }
+      },
+      "rooms_list": {
+        "title": "Räume ({room_count} konfiguriert)",
+        "data": {
+          "room_action": "Raum auswählen"
+        }
+      },
+      "edit_room": {
+        "title": "Raum bearbeiten: {room_name}",
+        "data": {
+          "label":        "Raumname",
+          "thermostat":   "Heizkörperthermostat (optional)",
+          "sensor":       "Temperatursensor (optional)",
+          "target_day":   "Tagessolltemperatur",
+          "target_night": "Nachtsolltemperatur",
+          "enabled":      "Raum aktiv",
+          "delete_room":  "⚠️ Diesen Raum löschen"
+        }
+      },
+      "add_room": {
+        "title": "Neuen Raum hinzufügen",
+        "data": {
+          "label":        "Raumname",
+          "area_id":      "Home Assistant Area (optional)",
+          "thermostat":   "Heizkörperthermostat (optional)",
+          "sensor":       "Temperatursensor (optional)",
+          "target_day":   "Tagessolltemperatur",
+          "target_night": "Nachtsolltemperatur"
+        }
+      },
+      "discover": {
+        "title": "Räume neu erkennen",
+        "description": "**{new_count}** neue Räume gefunden: {new_names}\n\nBestehende Räume werden nicht verändert.",
+        "data": {
+          "confirm": "Neue Räume hinzufügen"
+        }
+      }
+    }
+  }
+}

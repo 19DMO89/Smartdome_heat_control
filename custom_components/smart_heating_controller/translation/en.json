@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Smart Heating",
+        "description": "Select your main thermostat and global settings.",
+        "data": {
+          "main_thermostat":      "Main thermostat",
+          "boost_delta":          "Boost delta (°C)",
+          "tolerance":            "Tolerance (°C)",
+          "night_start":          "Night mode starts",
+          "morning_boost_start":  "Morning boost starts",
+          "morning_boost_end":    "Day mode starts"
+        }
+      },
+      "rooms": {
+        "title": "Discovered rooms",
+        "description": "**{room_count}** rooms were automatically discovered:\n\n{room_names}\n\nYou can edit rooms at any time via the integration settings.",
+        "data": {
+          "confirm": "Import rooms"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Smart Heating is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating – Options",
+        "data": { "action": "What would you like to do?" }
+      },
+      "global": {
+        "title": "Global settings",
+        "data": {
+          "main_thermostat":      "Main thermostat",
+          "boost_delta":          "Boost delta (°C)",
+          "tolerance":            "Tolerance (°C)",
+          "night_start":          "Night mode starts",
+          "morning_boost_start":  "Morning boost starts",
+          "morning_boost_end":    "Day mode starts"
+        }
+      },
+      "rooms_list": {
+        "title": "Rooms ({room_count} configured)",
+        "data": { "room_action": "Select room" }
+      },
+      "edit_room": {
+        "title": "Edit room: {room_name}",
+        "data": {
+          "label":        "Room name",
+          "thermostat":   "Radiator thermostat (optional)",
+          "sensor":       "Temperature sensor (optional)",
+          "target_day":   "Day target temperature",
+          "target_night": "Night target temperature",
+          "enabled":      "Room active",
+          "delete_room":  "⚠️ Delete this room"
+        }
+      },
+      "add_room": {
+        "title": "Add new room",
+        "data": {
+          "label":        "Room name",
+          "area_id":      "Home Assistant Area (optional)",
+          "thermostat":   "Radiator thermostat (optional)",
+          "sensor":       "Temperature sensor (optional)",
+          "target_day":   "Day target temperature",
+          "target_night": "Night target temperature"
+        }
+      },
+      "discover": {
+        "title": "Re-discover rooms",
+        "description": "**{new_count}** new rooms found: {new_names}\n\nExisting rooms will not be changed.",
+        "data": { "confirm": "Add new rooms" }
+      }
+    }
+  }
+}
