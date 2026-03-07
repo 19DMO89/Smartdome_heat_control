@@ -53,7 +53,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await controller.async_start()
-
     await _async_register_frontend(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -81,11 +80,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not remaining_entries:
         try:
-            frontend.async_remove_panel(hass, "smartdome_control")
-        except Exception:
-            _LOGGER.debug("Panel smartdome_control konnte nicht entfernt werden")
-
-        try:
             hass.states.async_remove(f"{DOMAIN}.config")
         except Exception:
             _LOGGER.debug("State %s.config konnte nicht entfernt werden", DOMAIN)
@@ -112,24 +106,21 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             await hass.http.async_register_static_paths(
                 [StaticPathConfig("/smartdome_ui", frontend_path, False)]
             )
-            hass.data[DOMAIN]["_frontend_registered"] = True
         else:
             _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
+            return
 
-    try:
-        frontend.async_remove_panel(hass, "smartdome_control")
-    except Exception:
-        pass
+        frontend.async_register_built_in_panel(
+            hass,
+            component_name="iframe",
+            sidebar_title="Smartdome Heat",
+            sidebar_icon="mdi:radiator",
+            frontend_url_path="smartdome_control",
+            config={"url": "/smartdome_ui/index.html"},
+            require_admin=False,
+        )
 
-    frontend.async_register_built_in_panel(
-        hass,
-        component_name="iframe",
-        sidebar_title="Smartdome Heat",
-        sidebar_icon="mdi:radiator",
-        frontend_url_path="smartdome_control",
-        config={"url": "/smartdome_ui/index.html"},
-        require_admin=False,
-    )
+        hass.data[DOMAIN]["_frontend_registered"] = True
 
 
 def _async_register_ws_save_config(hass: HomeAssistant) -> None:
@@ -222,6 +213,8 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 "sensor": call.data.get("sensor", ""),
                 "target_day": call.data.get("target_day", 21.0),
                 "target_night": call.data.get("target_night", 18.0),
+                "day_start": call.data.get("day_start", ""),
+                "night_start": call.data.get("night_start", ""),
                 "enabled": call.data.get("enabled", True),
             }
 
