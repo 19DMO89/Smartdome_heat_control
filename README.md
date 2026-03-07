@@ -1,6 +1,7 @@
-<p align="center">
-<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/images/icon.png" width="96">
-</p>
+<h1>
+<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/images/icon.png" width="32" align="center">
+Smartdome Heat Control
+</h1>
 
 [![HACS
 Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)\
