@@ -22,6 +22,7 @@ CONF_NIGHT_START = "night_start"
 CONF_MORNING_BOOST_START = "morning_boost_start"
 CONF_MORNING_BOOST_END = "morning_boost_end"
 CONF_ROOMS = "rooms"
+CONF_ROOM_WINDOW_SENSOR = "window_sensor"
 
 # Room-Keys
 CONF_ROOM_LABEL = "label"
