@@ -40,6 +40,11 @@ CONF_VACATION_ENABLED = "vacation_enabled"
 CONF_VACATION_TEMPERATURE = "vacation_temperature"
 CONF_AWAY_ENABLED = "away_enabled"
 CONF_ROOM_AWAY_TEMPERATURE = "away_temperature"
+CONF_WINDOW_OPEN_DELAY = "window_open_delay"
+CONF_WINDOW_CLOSE_DELAY = "window_close_delay"
+
+DEFAULT_WINDOW_OPEN_DELAY = 120
+DEFAULT_WINDOW_CLOSE_DELAY = 60
 
 
 
