@@ -43,23 +43,22 @@ function setStatus(message, type = "warn") {
 }
 
 async function haFetch(path, options = {}) {
+
+  const auth = await window.hassConnection;
+  const token = auth.auth.data.access_token;
+
   const response = await fetch(path, {
     ...options,
-    credentials: "same-origin",
     headers: {
+      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+      ...(options.headers || {})
+    }
   });
 
   if (!response.ok) {
-    let details = "";
-    try {
-      details = await response.text();
-    } catch {
-      details = "";
-    }
-    throw new Error(`${response.status} ${response.statusText}${details ? ` – ${details}` : ""}`);
+    const text = await response.text();
+    throw new Error(`${response.status} ${text}`);
   }
 
   const text = await response.text();
