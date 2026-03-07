@@ -8,14 +8,8 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.area_registry import async_get as async_get_area_registry
-from homeassistant.helpers.device_registry import (
-    DeviceEntry,
-    async_get as async_get_device_registry,
-)
-from homeassistant.helpers.entity_registry import (
-    EntityEntry,
-    async_get as async_get_entity_registry,
-)
+from homeassistant.helpers.device_registry import async_get as async_get_device_registry
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
 from .const import (
     CONF_ROOM_AREA_ID,
@@ -46,17 +40,18 @@ def _safe_float(value: Any) -> float | None:
 
 
 def _entity_area(
-    entity: EntityEntry,
+    entity: Any,
     area_id: str,
-    device_registry,
+    device_registry: Any,
 ) -> bool:
     """Prüfen, ob eine Entity direkt oder über ihr Device zu einer Area gehört."""
-    if entity.area_id == area_id:
+    if getattr(entity, "area_id", None) == area_id:
         return True
 
-    if entity.device_id:
-        device: DeviceEntry | None = device_registry.async_get(entity.device_id)
-        if device and device.area_id == area_id:
+    device_id = getattr(entity, "device_id", None)
+    if device_id:
+        device = device_registry.async_get(device_id)
+        if device and getattr(device, "area_id", None) == area_id:
             return True
 
     return False
@@ -64,10 +59,10 @@ def _entity_area(
 
 def _available_entities(
     hass: HomeAssistant,
-    entities: list[EntityEntry],
-) -> list[EntityEntry]:
+    entities: list[Any],
+) -> list[Any]:
     """Nur verfügbare Entities zurückgeben."""
-    result: list[EntityEntry] = []
+    result: list[Any] = []
     for entity in entities:
         state = hass.states.get(entity.entity_id)
         if _is_state_available(state):
@@ -77,7 +72,7 @@ def _available_entities(
 
 def _best_entity(
     hass: HomeAssistant,
-    entities: list[EntityEntry],
+    entities: list[Any],
     domain: str,
     prefer_available: bool = True,
 ) -> str | None:
@@ -98,7 +93,7 @@ def _best_entity(
     return candidates[0].entity_id
 
 
-def _sensor_score(hass: HomeAssistant, entity: EntityEntry) -> tuple[int, int]:
+def _sensor_score(hass: HomeAssistant, entity: Any) -> tuple[int, int]:
     """Sensor bewerten."""
     score = 0
     state = hass.states.get(entity.entity_id)
@@ -120,7 +115,7 @@ def _sensor_score(hass: HomeAssistant, entity: EntityEntry) -> tuple[int, int]:
 
 def _best_sensor(
     hass: HomeAssistant,
-    entities: list[EntityEntry],
+    entities: list[Any],
 ) -> str | None:
     """Besten Temperatursensor in einer Area finden."""
     candidates = [
@@ -197,10 +192,7 @@ async def async_discover_rooms(hass: HomeAssistant) -> dict[str, dict[str, Any]]
 
 async def async_get_all_thermostats(hass: HomeAssistant) -> list[str]:
     """Alle climate.* Entities zurückgeben."""
-    return sorted(
-        entity_id
-        for entity_id in hass.states.async_entity_ids(CLIMATE_DOMAIN)
-    )
+    return sorted(hass.states.async_entity_ids(CLIMATE_DOMAIN))
 
 
 async def async_get_all_sensors(hass: HomeAssistant) -> list[str]:
