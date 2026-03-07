@@ -1,12 +1,11 @@
 """Smartdome Heat Control – Integration Entry Point."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
 from typing import Any
-
-import json
 
 import voluptuous as vol
 from homeassistant.components import frontend, websocket_api
@@ -16,10 +15,18 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import (
+    CONF_AWAY_ENABLED,
     CONF_ROOMS,
+    CONF_ROOM_AWAY_TEMPERATURE,
+    CONF_VACATION_ENABLED,
+    CONF_VACATION_TEMPERATURE,
     DATA_CONTROLLER,
     DATA_ENABLED,
+    DEFAULT_AWAY_ENABLED,
     DEFAULT_ENABLED,
+    DEFAULT_ROOM_AWAY_TEMPERATURE,
+    DEFAULT_VACATION_ENABLED,
+    DEFAULT_VACATION_TEMPERATURE,
     DOMAIN,
     PLATFORMS,
     SERVICE_ADD_ROOM,
@@ -30,6 +37,7 @@ from .const import (
 from .helpers import async_discover_rooms, deep_merge
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def _get_integration_version() -> str:
     """Version aus manifest.json lesen."""
@@ -42,7 +50,8 @@ def _get_integration_version() -> str:
     except Exception:
         _LOGGER.exception("Version aus manifest.json konnte nicht gelesen werden")
         return "dev"
-        
+
+
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """YAML-Setup wird nicht verwendet."""
     return True
@@ -77,6 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.is_running:
         await controller.async_start()
     else:
+
         @callback
         def _start_when_ready(event) -> None:
             hass.async_create_task(controller.async_start())
@@ -166,6 +176,10 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "sensor": room.get("sensor", ""),
             "target_day": room.get("target_day", 21.0),
             "target_night": room.get("target_night", 18.0),
+            "away_temperature": room.get(
+                "away_temperature",
+                DEFAULT_ROOM_AWAY_TEMPERATURE,
+            ),
             "day_start": room.get("day_start", ""),
             "night_start": room.get("night_start", ""),
             "enabled": room.get("enabled", True),
@@ -178,6 +192,12 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     """Gesamte Config normalisieren."""
     normalized = dict(cfg)
     normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    normalized.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
+    normalized.setdefault(
+        CONF_VACATION_TEMPERATURE,
+        DEFAULT_VACATION_TEMPERATURE,
+    )
+    normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
     return normalized
 
@@ -272,6 +292,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 "sensor": call.data.get("sensor", ""),
                 "target_day": call.data.get("target_day", 21.0),
                 "target_night": call.data.get("target_night", 18.0),
+                "away_temperature": call.data.get(
+                    "away_temperature",
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                ),
                 "day_start": call.data.get("day_start", ""),
                 "night_start": call.data.get("night_start", ""),
                 "enabled": call.data.get("enabled", True),
@@ -324,17 +348,39 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
         for room_id, discovered_room in discovered_rooms.items():
             if room_id not in existing_rooms:
-                existing_rooms[room_id] = discovered_room
+                existing_rooms[room_id] = {
+                    **discovered_room,
+                    "away_temperature": discovered_room.get(
+                        "away_temperature",
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
+                }
                 continue
 
             existing = existing_rooms[room_id]
             existing_rooms[room_id] = {
                 "label": existing.get("label", discovered_room.get("label", room_id)),
                 "area_id": existing.get("area_id", discovered_room.get("area_id", "")),
-                "thermostat": existing.get("thermostat", discovered_room.get("thermostat", "")),
+                "thermostat": existing.get(
+                    "thermostat",
+                    discovered_room.get("thermostat", ""),
+                ),
                 "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
-                "target_day": existing.get("target_day", discovered_room.get("target_day", 21.0)),
-                "target_night": existing.get("target_night", discovered_room.get("target_night", 18.0)),
+                "target_day": existing.get(
+                    "target_day",
+                    discovered_room.get("target_day", 21.0),
+                ),
+                "target_night": existing.get(
+                    "target_night",
+                    discovered_room.get("target_night", 18.0),
+                ),
+                "away_temperature": existing.get(
+                    "away_temperature",
+                    discovered_room.get(
+                        "away_temperature",
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
+                ),
                 "day_start": existing.get("day_start", ""),
                 "night_start": existing.get("night_start", ""),
                 "enabled": existing.get("enabled", True),
