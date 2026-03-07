@@ -44,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
 
     controller = SmartHeatingController(hass, dict(cfg))
-    controller.set_enabled(bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
+    controller._enabled = bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED))
 
     hass.data[DOMAIN][entry.entry_id] = {
         DATA_CONTROLLER: controller,
@@ -75,7 +75,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if controller is not None:
         await controller.async_stop()
 
-    if not hass.data.get(DOMAIN):
+    remaining_entries = [
+        key for key in hass.data.get(DOMAIN, {}) if not key.startswith("_")
+    ]
+
+    if not remaining_entries:
         try:
             frontend.async_remove_panel(hass, "smartdome_control")
         except Exception:
@@ -103,12 +107,14 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Statisches Frontend und Sidebar-Panel registrieren."""
     frontend_path = os.path.join(os.path.dirname(__file__), "www")
 
-    if os.path.exists(frontend_path):
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig("/smartdome_ui", frontend_path, False)]
-        )
-    else:
-        _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
+    if not hass.data[DOMAIN].get("_frontend_registered"):
+        if os.path.exists(frontend_path):
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig("/smartdome_ui", frontend_path, False)]
+            )
+            hass.data[DOMAIN]["_frontend_registered"] = True
+        else:
+            _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
 
     try:
         frontend.async_remove_panel(hass, "smartdome_control")
