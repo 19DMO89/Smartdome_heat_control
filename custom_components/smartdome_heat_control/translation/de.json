@@ -74,6 +74,7 @@
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen"
+          "window_sensor": "Fensterkontakt"
         }
       },
       "add_room": {
@@ -89,6 +90,7 @@
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv"
+          "window_sensor": "Fensterkontakt"
         }
       }
     },
