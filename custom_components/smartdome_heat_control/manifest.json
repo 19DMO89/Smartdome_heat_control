@@ -1,7 +1,7 @@
 {
   "domain": "smartdome_heat_control",
   "name": "Smartdome Heat Control",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "config_flow": true,
   "documentation": "https://github.com/19DMO89/smartdome_heat_control",
   "issue_tracker": "https://github.com/19DMO89/smartdome_heat_control/issues",
