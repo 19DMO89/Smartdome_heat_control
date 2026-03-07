@@ -9,7 +9,104 @@
           "boost_delta":          "Boost delta (°C)",
           "tolerance":            "Tolerance (°C)",
           "night_start":          "Night mode starts",
-          "morning_boost_start":  "Morning boost starts",
+          "morning_boost_start":  "Morning boost starts",{
+  "title": "Smartdome Heat Control",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Smartdome Heat Control",
+        "description": "Select the main thermostat and the global heating parameters.",
+        "data": {
+          "main_thermostat": "Main thermostat",
+          "main_sensor": "Main thermostat temperature sensor",
+          "boost_delta": "Boost delta",
+          "tolerance": "Tolerance",
+          "night_start": "Night start",
+          "morning_boost_start": "Day start / morning boost start",
+          "morning_boost_end": "Morning boost end"
+        }
+      },
+      "rooms": {
+        "title": "Confirm rooms",
+        "description": "{room_count} rooms were detected: {room_names}. Confirm to finish setup.",
+        "data": {
+          "confirm": "Use detected rooms"
+        }
+      }
+    },
+    "error": {}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smartdome Heat Control",
+        "description": "Choose what you want to edit.",
+        "data": {
+          "action": "Section"
+        }
+      },
+      "global": {
+        "title": "Global settings",
+        "description": "Adjust the main thermostat, main sensor, and general rules.",
+        "data": {
+          "main_thermostat": "Main thermostat",
+          "main_sensor": "Main thermostat temperature sensor",
+          "boost_delta": "Boost delta",
+          "tolerance": "Tolerance",
+          "night_start": "Global night start",
+          "morning_boost_start": "Global day start",
+          "morning_boost_end": "Morning boost end"
+        }
+      },
+      "rooms_list": {
+        "title": "Manage rooms",
+        "description": "Select a room to edit or create a new one.",
+        "data": {
+          "room_action": "Room"
+        }
+      },
+      "edit_room": {
+        "title": "Edit room",
+        "description": "Edit thermostat, sensor, temperatures, and schedule for this room.",
+        "data": {
+          "label": "Label",
+          "thermostat": "Thermostat",
+          "sensor": "Temperature sensor",
+          "target_day": "Day target temperature",
+          "target_night": "Night target temperature",
+          "day_start": "Day start",
+          "night_start": "Night start",
+          "enabled": "Room enabled",
+          "delete_room": "Delete room"
+        }
+      },
+      "add_room": {
+        "title": "Add room",
+        "description": "Create a new room manually.",
+        "data": {
+          "label": "Label",
+          "thermostat": "Thermostat",
+          "sensor": "Temperature sensor",
+          "target_day": "Day target temperature",
+          "target_night": "Night target temperature",
+          "day_start": "Day start",
+          "night_start": "Night start",
+          "enabled": "Room enabled"
+        }
+      }
+    },
+    "error": {}
+  },
+  "selector": {
+    "action": {
+      "options": {
+        "global": "⚙️ Global settings",
+        "rooms": "🏠 Manage rooms",
+        "discover": "🔎 Rediscover rooms"
+      }
+    }
+  }
+}
           "morning_boost_end":    "Day mode starts"
         }
       },
