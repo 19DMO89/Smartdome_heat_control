@@ -13,11 +13,12 @@ const DEFAULTS = {
   rooms: {},
 };
 
-let appState = {
+const state = {
   config: structuredClone(DEFAULTS),
   climates: [],
   sensors: [],
   allStates: [],
+  initialized: false,
 };
 
 const els = {
@@ -27,13 +28,13 @@ const els = {
   reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
   addRoomBtn: document.getElementById("addRoomBtn"),
   enabled: document.getElementById("enabled"),
-  main_thermostat: document.getElementById("main_thermostat"),
-  main_sensor: document.getElementById("main_sensor"),
-  boost_delta: document.getElementById("boost_delta"),
+  mainThermostat: document.getElementById("main_thermostat"),
+  mainSensor: document.getElementById("main_sensor"),
+  boostDelta: document.getElementById("boost_delta"),
   tolerance: document.getElementById("tolerance"),
-  night_start: document.getElementById("night_start"),
-  morning_boost_start: document.getElementById("morning_boost_start"),
-  morning_boost_end: document.getElementById("morning_boost_end"),
+  nightStart: document.getElementById("night_start"),
+  morningBoostStart: document.getElementById("morning_boost_start"),
+  morningBoostEnd: document.getElementById("morning_boost_end"),
   roomsContainer: document.getElementById("roomsContainer"),
 };
 
@@ -42,46 +43,146 @@ function setStatus(message, type = "warn") {
   els.statusBox.className = `status ${type}`;
 }
 
-async function haFetch(path, options = {}) {
-
-  const auth = await window.hassConnection;
-  const token = auth.auth.data.access_token;
-
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`${response.status} ${text}`);
-  }
-
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-async function callService(domain, service, data = {}) {
-  await haFetch(`/api/services/${domain}/${service}`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+function prettyEntityLabel(item) {
+  const friendlyName = item.attributes?.friendly_name || item.entity_id;
+  return `${friendlyName} (${item.entity_id})`;
 }
 
 function sortByEntityId(items) {
   return [...items].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
 }
 
-function prettyEntityLabel(stateObj) {
-  const name = stateObj.attributes?.friendly_name || stateObj.entity_id;
-  return `${name} (${stateObj.entity_id})`;
+function isTemperatureSensor(entity) {
+  if (!entity?.entity_id?.startsWith("sensor.")) {
+    return false;
+  }
+
+  const deviceClass = entity.attributes?.device_class;
+  if (deviceClass === "temperature") {
+    return true;
+  }
+
+  const entityId = entity.entity_id.toLowerCase();
+  const looksLikeTemperature = entityId.includes("temp") || entityId.includes("temperature");
+  const numericState = !Number.isNaN(Number(entity.state));
+
+  return looksLikeTemperature && numericState;
 }
 
-function buildSelectOptions(selectEl, options, selectedValue, includeEmpty = true, emptyLabel = "— Nicht gesetzt —") {
+function normalizeTime(value, fallback) {
+  if (typeof value !== "string" || !value.includes(":")) {
+    return fallback;
+  }
+  return value.slice(0, 5);
+}
+
+function normalizeNumber(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeConfig(input) {
+  const cfg = {
+    ...structuredClone(DEFAULTS),
+    ...(input || {}),
+  };
+
+  cfg.enabled = cfg.enabled !== false;
+  cfg.main_thermostat = typeof cfg.main_thermostat === "string" ? cfg.main_thermostat : "";
+  cfg.main_sensor = typeof cfg.main_sensor === "string" ? cfg.main_sensor : "";
+  cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
+  cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
+  cfg.night_start = normalizeTime(cfg.night_start, DEFAULTS.night_start);
+  cfg.morning_boost_start = normalizeTime(cfg.morning_boost_start, DEFAULTS.morning_boost_start);
+  cfg.morning_boost_end = normalizeTime(cfg.morning_boost_end, DEFAULTS.morning_boost_end);
+
+  if (!cfg.rooms || typeof cfg.rooms !== "object") {
+    cfg.rooms = {};
+  }
+
+  const normalizedRooms = {};
+  for (const [roomId, room] of Object.entries(cfg.rooms)) {
+    normalizedRooms[roomId] = {
+      label: typeof room?.label === "string" && room.label.trim() ? room.label.trim() : roomId,
+      area_id: typeof room?.area_id === "string" ? room.area_id : "",
+      thermostat: typeof room?.thermostat === "string" ? room.thermostat : "",
+      sensor: typeof room?.sensor === "string" ? room.sensor : "",
+      target_day: normalizeNumber(room?.target_day, 21.0),
+      target_night: normalizeNumber(room?.target_night, 18.0),
+      enabled: room?.enabled !== false,
+    };
+  }
+
+  cfg.rooms = normalizedRooms;
+  return cfg;
+}
+
+async function getHassConnection() {
+  if (window.hassConnection) {
+    return window.hassConnection;
+  }
+
+  if (window.parent?.hassConnection) {
+    return window.parent.hassConnection;
+  }
+
+  throw new Error("Keine Home-Assistant-Verbindung verfügbar");
+}
+
+async function getAccessToken() {
+  const connWrapper = await getHassConnection();
+  const token = connWrapper?.auth?.data?.access_token;
+
+  if (!token) {
+    throw new Error("Kein Zugriffstoken verfügbar");
+  }
+
+  return token;
+}
+
+async function haFetch(path, options = {}) {
+  const token = await getAccessToken();
+
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}${text ? ` – ${text}` : ""}`);
+  }
+
+  return text ? JSON.parse(text) : null;
+}
+
+async function callService(domain, service, data = {}) {
+  return haFetch(`/api/services/${domain}/${service}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+function buildSelectOptions(selectEl, items, selectedValue, options = {}) {
+  const {
+    includeEmpty = true,
+    emptyLabel = "— Nicht gesetzt —",
+  } = options;
+
   selectEl.innerHTML = "";
 
   if (includeEmpty) {
@@ -91,7 +192,7 @@ function buildSelectOptions(selectEl, options, selectedValue, includeEmpty = tru
     selectEl.appendChild(emptyOption);
   }
 
-  for (const item of options) {
+  for (const item of items) {
     const option = document.createElement("option");
     option.value = item.entity_id;
     option.textContent = prettyEntityLabel(item);
@@ -102,105 +203,64 @@ function buildSelectOptions(selectEl, options, selectedValue, includeEmpty = tru
   }
 }
 
-function normalizeConfig(input) {
-  const cfg = {
-    ...structuredClone(DEFAULTS),
-    ...(input || {}),
-  };
-
-  cfg.enabled = cfg.enabled !== false;
-  cfg.main_thermostat = cfg.main_thermostat || "";
-  cfg.main_sensor = cfg.main_sensor || "";
-  cfg.boost_delta = Number(cfg.boost_delta ?? DEFAULTS.boost_delta);
-  cfg.tolerance = Number(cfg.tolerance ?? DEFAULTS.tolerance);
-  cfg.night_start = cfg.night_start || DEFAULTS.night_start;
-  cfg.morning_boost_start = cfg.morning_boost_start || DEFAULTS.morning_boost_start;
-  cfg.morning_boost_end = cfg.morning_boost_end || DEFAULTS.morning_boost_end;
-  cfg.rooms = cfg.rooms && typeof cfg.rooms === "object" ? cfg.rooms : {};
-
-  for (const [roomId, room] of Object.entries(cfg.rooms)) {
-    cfg.rooms[roomId] = {
-      label: room.label || roomId,
-      area_id: room.area_id || "",
-      thermostat: room.thermostat || "",
-      sensor: room.sensor || "",
-      target_day: Number(room.target_day ?? 21.0),
-      target_night: Number(room.target_night ?? 18.0),
-      enabled: room.enabled !== false,
-    };
-  }
-
-  return cfg;
-}
-
 async function loadAllStates() {
   const states = await haFetch("/api/states");
-  appState.allStates = Array.isArray(states) ? states : [];
+  state.allStates = Array.isArray(states) ? states : [];
 
-  appState.climates = sortByEntityId(
-    appState.allStates.filter((s) => s.entity_id.startsWith("climate."))
+  state.climates = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("climate."))
   );
 
-  appState.sensors = sortByEntityId(
-    appState.allStates.filter((s) => {
-      if (!s.entity_id.startsWith("sensor.")) {
-        return false;
-      }
-
-      const deviceClass = s.attributes?.device_class;
-      if (deviceClass === "temperature") {
-        return true;
-      }
-
-      const id = s.entity_id.toLowerCase();
-      const looksLikeTemp = id.includes("temp") || id.includes("temperature");
-      const numericState = !Number.isNaN(Number(s.state));
-      return looksLikeTemp && numericState;
-    })
+  state.sensors = sortByEntityId(
+    state.allStates.filter((item) => isTemperatureSensor(item))
   );
 }
 
 async function loadConfig() {
-  let stateObj = null;
-
   try {
-    stateObj = await haFetch(`/api/states/${CONFIG_ENTITY_ID}`);
-  } catch {
-    stateObj = null;
+    const entity = await haFetch(`/api/states/${CONFIG_ENTITY_ID}`);
+    state.config = normalizeConfig(entity?.attributes || {});
+  } catch (error) {
+    if (String(error.message).includes("404")) {
+      state.config = normalizeConfig({});
+      return;
+    }
+    throw error;
   }
-
-  const attrs = stateObj?.attributes || {};
-  appState.config = normalizeConfig(attrs);
 }
 
-function renderGlobalForm() {
-  const cfg = appState.config;
+function renderGlobalSettings() {
+  const cfg = state.config;
 
   els.enabled.checked = cfg.enabled;
-  els.boost_delta.value = Number.isFinite(cfg.boost_delta) ? cfg.boost_delta : DEFAULTS.boost_delta;
-  els.tolerance.value = Number.isFinite(cfg.tolerance) ? cfg.tolerance : DEFAULTS.tolerance;
-  els.night_start.value = cfg.night_start || DEFAULTS.night_start;
-  els.morning_boost_start.value = cfg.morning_boost_start || DEFAULTS.morning_boost_start;
-  els.morning_boost_end.value = cfg.morning_boost_end || DEFAULTS.morning_boost_end;
+  els.boostDelta.value = String(cfg.boost_delta);
+  els.tolerance.value = String(cfg.tolerance);
+  els.nightStart.value = cfg.night_start;
+  els.morningBoostStart.value = cfg.morning_boost_start;
+  els.morningBoostEnd.value = cfg.morning_boost_end;
 
   buildSelectOptions(
-    els.main_thermostat,
-    appState.climates,
+    els.mainThermostat,
+    state.climates,
     cfg.main_thermostat,
-    true,
-    "— Bitte wählen —"
+    {
+      includeEmpty: true,
+      emptyLabel: "— Bitte wählen —",
+    }
   );
 
   buildSelectOptions(
-    els.main_sensor,
-    appState.sensors,
+    els.mainSensor,
+    state.sensors,
     cfg.main_sensor,
-    true,
-    "— Automatisch / keiner —"
+    {
+      includeEmpty: true,
+      emptyLabel: "— Automatisch / keiner —",
+    }
   );
 }
 
-function roomCardTemplate(roomId, room) {
+function createRoomCard(roomId, room) {
   const wrapper = document.createElement("div");
   wrapper.className = "room";
   wrapper.dataset.roomId = roomId;
@@ -225,12 +285,12 @@ function roomCardTemplate(roomId, room) {
     <div class="room-grid">
       <div class="field">
         <label>Bezeichnung</label>
-        <input class="room-label" type="text" value="${escapeAttr(room.label || "")}" />
+        <input class="room-label" type="text" value="${escapeHtml(room.label || "")}" />
       </div>
 
       <div class="field">
         <label>Area-ID</label>
-        <input class="room-area-id" type="text" value="${escapeAttr(room.area_id || "")}" />
+        <input class="room-area-id" type="text" value="${escapeHtml(room.area_id || "")}" />
       </div>
 
       <div class="field">
@@ -245,37 +305,36 @@ function roomCardTemplate(roomId, room) {
 
       <div class="field">
         <label>Zieltemperatur Tag (°C)</label>
-        <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeAttr(room.target_day)}" />
+        <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_day)}" />
       </div>
 
       <div class="field">
         <label>Zieltemperatur Nacht (°C)</label>
-        <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeAttr(room.target_night)}" />
+        <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_night)}" />
       </div>
     </div>
   `;
 
   const thermostatSelect = wrapper.querySelector(".room-thermostat");
   const sensorSelect = wrapper.querySelector(".room-sensor");
+  const deleteBtn = wrapper.querySelector(".room-delete-btn");
 
   buildSelectOptions(
     thermostatSelect,
-    appState.climates,
+    state.climates,
     room.thermostat || "",
-    true,
-    "— Nicht gesetzt —"
+    { includeEmpty: true, emptyLabel: "— Nicht gesetzt —" }
   );
 
   buildSelectOptions(
     sensorSelect,
-    appState.sensors,
+    state.sensors,
     room.sensor || "",
-    true,
-    "— Nicht gesetzt —"
+    { includeEmpty: true, emptyLabel: "— Nicht gesetzt —" }
   );
 
-  wrapper.querySelector(".room-delete-btn").addEventListener("click", () => {
-    delete appState.config.rooms[roomId];
+  deleteBtn.addEventListener("click", () => {
+    delete state.config.rooms[roomId];
     renderRooms();
   });
 
@@ -285,8 +344,8 @@ function roomCardTemplate(roomId, room) {
 function renderRooms() {
   els.roomsContainer.innerHTML = "";
 
-  const roomEntries = Object.entries(appState.config.rooms || {});
-  if (!roomEntries.length) {
+  const entries = Object.entries(state.config.rooms || {});
+  if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "muted";
     empty.textContent = "Noch keine Räume vorhanden.";
@@ -294,50 +353,56 @@ function renderRooms() {
     return;
   }
 
-  for (const [roomId, room] of roomEntries) {
-    els.roomsContainer.appendChild(roomCardTemplate(roomId, room));
+  for (const [roomId, room] of entries) {
+    els.roomsContainer.appendChild(createRoomCard(roomId, room));
   }
 }
 
 function collectFormState() {
-  const cfg = structuredClone(appState.config);
+  const cfg = structuredClone(state.config);
 
   cfg.enabled = els.enabled.checked;
-  cfg.main_thermostat = els.main_thermostat.value || "";
-  cfg.main_sensor = els.main_sensor.value || "";
-  cfg.boost_delta = Number(els.boost_delta.value || DEFAULTS.boost_delta);
-  cfg.tolerance = Number(els.tolerance.value || DEFAULTS.tolerance);
-  cfg.night_start = els.night_start.value || DEFAULTS.night_start;
-  cfg.morning_boost_start = els.morning_boost_start.value || DEFAULTS.morning_boost_start;
-  cfg.morning_boost_end = els.morning_boost_end.value || DEFAULTS.morning_boost_end;
+  cfg.main_thermostat = els.mainThermostat.value || "";
+  cfg.main_sensor = els.mainSensor.value || "";
+  cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
+  cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
+  cfg.night_start = normalizeTime(els.nightStart.value, DEFAULTS.night_start);
+  cfg.morning_boost_start = normalizeTime(
+    els.morningBoostStart.value,
+    DEFAULTS.morning_boost_start
+  );
+  cfg.morning_boost_end = normalizeTime(
+    els.morningBoostEnd.value,
+    DEFAULTS.morning_boost_end
+  );
 
+  const rooms = {};
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
-  const nextRooms = {};
 
   for (const node of roomNodes) {
     const roomId = node.dataset.roomId;
-    nextRooms[roomId] = {
+    rooms[roomId] = {
       label: node.querySelector(".room-label").value.trim() || roomId,
       area_id: node.querySelector(".room-area-id").value.trim(),
       thermostat: node.querySelector(".room-thermostat").value || "",
       sensor: node.querySelector(".room-sensor").value || "",
-      target_day: Number(node.querySelector(".room-target-day").value || 21),
-      target_night: Number(node.querySelector(".room-target-night").value || 18),
+      target_day: normalizeNumber(node.querySelector(".room-target-day").value, 21.0),
+      target_night: normalizeNumber(node.querySelector(".room-target-night").value, 18.0),
       enabled: node.querySelector(".room-enabled").checked,
     };
   }
 
-  cfg.rooms = nextRooms;
+  cfg.rooms = rooms;
   return normalizeConfig(cfg);
 }
 
-function createRoomId() {
+function generateRoomId() {
   return `room_${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function addRoom() {
-  const roomId = createRoomId();
-  appState.config.rooms[roomId] = {
+  const roomId = generateRoomId();
+  state.config.rooms[roomId] = {
     label: "Neuer Raum",
     area_id: "",
     thermostat: "",
@@ -351,81 +416,98 @@ function addRoom() {
 
 async function saveConfig() {
   try {
+    setButtonsDisabled(true);
     setStatus("Speichere Konfiguration …", "warn");
+
     const cfg = collectFormState();
 
     await callService(DOMAIN, "update_config", {
       config: cfg,
     });
 
-    appState.config = cfg;
+    state.config = cfg;
+    renderGlobalSettings();
+    renderRooms();
     setStatus("Konfiguration erfolgreich gespeichert.", "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Speichern fehlgeschlagen: ${error.message}`, "err");
+  } finally {
+    setButtonsDisabled(false);
   }
 }
 
 async function reloadRooms() {
   try {
+    setButtonsDisabled(true);
     setStatus("Erkenne Räume neu …", "warn");
+
     await callService(DOMAIN, "reload", {});
     await refreshAll();
+
     setStatus("Räume wurden neu erkannt.", "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Neu-Erkennung fehlgeschlagen: ${error.message}`, "err");
+  } finally {
+    setButtonsDisabled(false);
+  }
+}
+
+async function reloadConfig() {
+  try {
+    setButtonsDisabled(true);
+    setStatus("Lade Konfiguration neu …", "warn");
+
+    await refreshAll();
+
+    setStatus("Konfiguration neu geladen.", "ok");
+  } catch (error) {
+    console.error(error);
+    setStatus(`Neu laden fehlgeschlagen: ${error.message}`, "err");
+  } finally {
+    setButtonsDisabled(false);
   }
 }
 
 async function refreshAll() {
   await loadAllStates();
   await loadConfig();
-  renderGlobalForm();
+  renderGlobalSettings();
   renderRooms();
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value);
+function setButtonsDisabled(disabled) {
+  els.saveBtn.disabled = disabled;
+  els.reloadConfigBtn.disabled = disabled;
+  els.reloadRoomsBtn.disabled = disabled;
+  els.addRoomBtn.disabled = disabled;
 }
 
 function bindEvents() {
   els.saveBtn.addEventListener("click", saveConfig);
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
-  els.reloadConfigBtn.addEventListener("click", async () => {
-    try {
-      setStatus("Lade Konfiguration neu …", "warn");
-      await refreshAll();
-      setStatus("Konfiguration neu geladen.", "ok");
-    } catch (error) {
-      console.error(error);
-      setStatus(`Neu laden fehlgeschlagen: ${error.message}`, "err");
-    }
-  });
+  els.reloadConfigBtn.addEventListener("click", reloadConfig);
   els.addRoomBtn.addEventListener("click", addRoom);
 }
 
 async function init() {
   bindEvents();
+  setButtonsDisabled(true);
+  setStatus("Initialisiere Panel …", "warn");
 
   try {
     await refreshAll();
+    state.initialized = true;
     setStatus("Konfiguration geladen.", "ok");
   } catch (error) {
     console.error(error);
     setStatus(
-      `Initialisierung fehlgeschlagen: ${error.message}. Prüfe, ob die Integration geladen ist.`,
+      `Initialisierung fehlgeschlagen: ${error.message}`,
       "err"
     );
+  } finally {
+    setButtonsDisabled(false);
   }
 }
 
