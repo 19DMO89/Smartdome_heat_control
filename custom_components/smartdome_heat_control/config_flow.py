@@ -17,6 +17,7 @@ from .const import (
     CONF_MAIN_THERMOSTAT,
     CONF_MORNING_BOOST_END,
     CONF_MORNING_BOOST_START,
+    CONF_ROOM_WINDOW_SENSOR,
     CONF_NIGHT_START,
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
@@ -64,7 +65,14 @@ def _climate_selector() -> selector.EntitySelector:
             multiple=False,
         )
     )
-
+    
+def _window_sensor_selector() -> selector.EntitySelector:
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain="binary_sensor",
+            multiple=False,
+        )
+    )
 
 def _temp_number_selector(
     minimum: float,
@@ -122,6 +130,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode="slider",
                     )
                 ),
+                
                 vol.Optional(
                     CONF_TOLERANCE,
                     default=DEFAULT_TOLERANCE,
@@ -397,6 +406,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                     CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
+                    CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
                 }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -445,6 +455,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     default=room.get(CONF_ROOM_ENABLED, True),
                 ): bool,
                 vol.Optional("delete_room", default=False): bool,
+                vol.Optional(
+                    CONF_ROOM_WINDOW_SENSOR,
+                    default=room.get(CONF_ROOM_WINDOW_SENSOR, ""),
+                ): _window_sensor_selector(),
             }
         )
 
@@ -475,6 +489,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                 CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                 CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
+                CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
             }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -503,6 +518,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_ROOM_DAY_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_NIGHT_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_ENABLED, default=True): bool,
+                    vol.Optional(CONF_ROOM_WINDOW_SENSOR): _window_sensor_selector(),
                 }
             ),
         )
