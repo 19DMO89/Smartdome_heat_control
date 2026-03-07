@@ -13,7 +13,7 @@ SERVICE_ADD_ROOM = "add_room"
 SERVICE_REMOVE_ROOM = "remove_room"
 SERVICE_RELOAD = "reload"
 
-# Config-Keys
+# Globale Config-Keys
 CONF_MAIN_THERMOSTAT = "main_thermostat"
 CONF_MAIN_SENSOR = "main_sensor"
 CONF_BOOST_DELTA = "boost_delta"
@@ -30,6 +30,8 @@ CONF_ROOM_THERMOSTAT = "thermostat"
 CONF_ROOM_SENSOR = "sensor"
 CONF_ROOM_TARGET_DAY = "target_day"
 CONF_ROOM_TARGET_NIGHT = "target_night"
+CONF_ROOM_DAY_START = "day_start"
+CONF_ROOM_NIGHT_START = "night_start"
 CONF_ROOM_ENABLED = "enabled"
 
 # Defaults
