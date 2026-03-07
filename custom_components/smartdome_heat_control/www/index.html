@@ -70,15 +70,15 @@
       flex-wrap: wrap;
     }
 
-  .room-live-temp {
-    color: #9fd0ff;
-    font-weight: 700;
-  }
+    .room-live-temp {
+      color: #9fd0ff;
+      font-weight: 700;
+    }
 
-  .room-heating {
-    font-size: 16px;
-    line-height: 1;
-  }
+    .room-heating {
+      font-size: 16px;
+      line-height: 1;
+    }
 
     button {
       appearance: none;
@@ -382,6 +382,26 @@
             </div>
           </div>
 
+          <div class="field full" style="margin-bottom: 14px;">
+            <div class="toggle">
+              <div class="toggle-text">
+                <strong>Urlaubsmodus</strong>
+                <span>Setzt alle Räume auf die globale Urlaubstemperatur.</span>
+              </div>
+              <input id="vacation_enabled" type="checkbox" />
+            </div>
+          </div>
+
+          <div class="field full" style="margin-bottom: 14px;">
+            <div class="toggle">
+              <div class="toggle-text">
+                <strong>Nicht Zuhause</strong>
+                <span>Verwendet pro Raum die konfigurierte Away-Temperatur.</span>
+              </div>
+              <input id="away_enabled" type="checkbox" />
+            </div>
+          </div>
+
           <div class="fields">
             <div class="field">
               <label for="main_thermostat">Hauptthermostat</label>
@@ -401,6 +421,11 @@
             <div class="field">
               <label for="tolerance">Toleranz (°C)</label>
               <input id="tolerance" type="number" min="0" step="0.1" />
+            </div>
+
+            <div class="field">
+              <label for="vacation_temperature">Urlaubstemperatur (°C)</label>
+              <input id="vacation_temperature" type="number" min="5" max="20" step="0.1" />
             </div>
 
             <div class="field">
