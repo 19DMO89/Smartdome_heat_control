@@ -1,181 +1,402 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>Smartdome Heat Control</title>
-    <style>
-        :root {
-            --primary: #ff9800; --bg: #111; --card-bg: #1c1c1e;
-            --text: #fff; --accent: #03a9f4; --heating: #ff5722;
-            --night: #673ab7; --glass: rgba(255, 255, 255, 0.05);
-        }
-        body { font-family: 'Roboto', sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        
-        .header-container { width: 100%; max-width: 1000px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; }
-        h1 { margin: 0; font-size: 2em; font-weight: 300; }
-        #stats { font-size: 0.9em; color: var(--accent); }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smartdome Heat Control</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #141a22;
+      --panel-2: #1b2430;
+      --text: #eef3f8;
+      --muted: #9fb0c3;
+      --line: #2b3848;
+      --accent: #4da3ff;
+      --accent-2: #7bb8ff;
+      --success: #2ecc71;
+      --danger: #ff6b6b;
+      --warning: #f5b942;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    }
 
-        .config-section { width: 100%; max-width: 1000px; background: #252527; border-radius: 12px; padding: 20px; margin-bottom: 30px; border: 1px solid #333; box-sizing: border-box; }
-        .global-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; }
+    * {
+      box-sizing: border-box;
+    }
 
-        #room-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; padding-bottom: 120px; }
-        .room-card { background: var(--card-bg); border-radius: 12px; padding: 20px; border: 1px solid #333; position: relative; transition: opacity 0.3s; }
-        .room-card.disabled { opacity: 0.4; filter: grayscale(0.8); }
-        
-        .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .room-title { color: var(--primary); font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #0b0f14 0%, #101721 100%);
+      color: var(--text);
+    }
 
-        .temp-display { text-align: center; margin-bottom: 15px; padding: 12px; background: var(--glass); border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
-        .temp-value { font-size: 2.2em; font-weight: 300; color: var(--accent); letter-spacing: -1px; }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
 
-        .mode-badge { font-size: 0.65em; padding: 2px 8px; border-radius: 10px; font-weight: bold; text-transform: uppercase; }
-        .mode-day { background: rgba(255,152,0,0.2); color: var(--primary); }
-        .mode-night { background: rgba(103,58,183,0.2); color: var(--night); }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
 
-        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--primary); }
-        input:checked + .slider:before { transform: translateX(16px); }
+    .title-block h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
 
-        label { display: block; font-size: 0.65em; color: #888; margin-bottom: 4px; text-transform: uppercase; }
-        select, input { background: #2c2c2e; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.9em; margin-bottom: 12px; }
-        
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .title-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
 
-        .save-bar { position: fixed; bottom: 0; left: 0; width: 100%; display: flex; justify-content: center; padding: 30px 0; background: linear-gradient(transparent, var(--bg) 60%); pointer-events: none; }
-        .save-btn { pointer-events: auto; background: var(--primary); color: #000; border: none; padding: 16px 80px; border-radius: 40px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 25px rgba(255,152,0,0.4); }
-    </style>
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 16px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #08111a;
+    }
+
+    button.success {
+      background: var(--success);
+      color: #07140c;
+    }
+
+    button.danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    button.ghost {
+      box-shadow: none;
+      border: 1px solid var(--line);
+      background: transparent;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: rgba(20, 26, 34, 0.92);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .status {
+      margin-bottom: 18px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 14px;
+    }
+
+    .status.ok {
+      border-color: rgba(46, 204, 113, 0.45);
+      color: #baf0cf;
+    }
+
+    .status.warn {
+      border-color: rgba(245, 185, 66, 0.45);
+      color: #ffe1a3;
+    }
+
+    .status.err {
+      border-color: rgba(255, 107, 107, 0.45);
+      color: #ffc1c1;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0f151d;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      outline: none;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #0f151d;
+    }
+
+    .toggle-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .toggle-text strong {
+      font-size: 14px;
+    }
+
+    .toggle-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .rooms-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .rooms {
+      display: grid;
+      gap: 14px;
+    }
+
+    .room {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: #10161e;
+    }
+
+    .room-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .room-title {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .room-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .room-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 920px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .fields,
+      .room-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .wrap {
+        padding: 16px;
+      }
+
+      .header {
+        margin-bottom: 18px;
+      }
+    }
+  </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="header">
+      <div class="title-block">
+        <h1>Smartdome Heat Control</h1>
+        <p>Heizungssteuerung, Hauptsensor und Räume direkt im Panel verwalten.</p>
+      </div>
 
-    <div class="header-container">
-        <h1>Smartdome Heat</h1>
-        <div id="stats">Lade Sensordaten...</div>
+      <div class="actions">
+        <button id="reloadRoomsBtn" class="ghost">Räume neu erkennen</button>
+        <button id="reloadConfigBtn" class="ghost">Neu laden</button>
+        <button id="saveBtn" class="primary">Konfiguration speichern</button>
+      </div>
     </div>
 
-    <div class="config-section">
-        <div style="margin-bottom:12px; font-weight:bold; color:var(--primary); font-size: 0.8em; letter-spacing: 1px;">⚙️ GLOBALE STANDARDS</div>
-        <div class="global-grid">
-            <div><label>Hauptthermostat</label><select id="main_thermostat" onchange="currentConfig.main_thermostat=this.value"></select></div>
-            <div><label>Std. Nacht-Start</label><input type="text" id="global_ns" onchange="currentConfig.night_start=this.value"></div>
-            <div><label>Std. Tag-Start</label><input type="text" id="global_ds" onchange="currentConfig.morning_boost_end=this.value"></div>
+    <div id="statusBox" class="status warn">Lade Konfiguration …</div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Globale Einstellungen</h2>
+
+        <div class="field full" style="margin-bottom: 14px;">
+          <div class="toggle">
+            <div class="toggle-text">
+              <strong>Steuerung aktiv</strong>
+              <span>Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.</span>
+            </div>
+            <input id="enabled" type="checkbox" />
+          </div>
         </div>
+
+        <div class="fields">
+          <div class="field">
+            <label for="main_thermostat">Hauptthermostat</label>
+            <select id="main_thermostat"></select>
+          </div>
+
+          <div class="field">
+            <label for="main_sensor">Temperatursensor Hauptthermostat</label>
+            <select id="main_sensor"></select>
+          </div>
+
+          <div class="field">
+            <label for="boost_delta">Boost-Delta (°C)</label>
+            <input id="boost_delta" type="number" min="0" step="0.1" />
+          </div>
+
+          <div class="field">
+            <label for="tolerance">Toleranz (°C)</label>
+            <input id="tolerance" type="number" min="0" step="0.1" />
+          </div>
+
+          <div class="field">
+            <label for="night_start">Nacht-Start</label>
+            <input id="night_start" type="time" />
+          </div>
+
+          <div class="field">
+            <label for="morning_boost_start">Morgen-Boost Start</label>
+            <input id="morning_boost_start" type="time" />
+          </div>
+
+          <div class="field">
+            <label for="morning_boost_end">Morgen-Boost Ende</label>
+            <input id="morning_boost_end" type="time" />
+          </div>
+        </div>
+
+        <div class="footer-note">
+          Der Hauptsensor ist optional. Wenn keiner gesetzt ist, kann das Backend auf die Temperatur des Hauptthermostats zurückfallen.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="rooms-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">Räume</h2>
+            <div class="muted">Thermostate, Sensoren und Zieltemperaturen pro Raum.</div>
+          </div>
+
+          <button id="addRoomBtn" class="success">Raum hinzufügen</button>
+        </div>
+
+        <div id="roomsContainer" class="rooms"></div>
+      </section>
     </div>
+  </div>
 
-    <div id="room-container"></div>
-
-    <div class="save-bar"><button class="save-btn" onclick="saveToHA()">Konfiguration Speichern</button></div>
-
-    <script>
-        let hass;
-        let currentConfig = {};
-
-        async function start() {
-            try {
-                hass = window.parent.document.querySelector("home-assistant").hass;
-                if (!hass || !hass.states["smartdome_heat_control.config"]) { setTimeout(start, 500); return; }
-                const state = hass.states["smartdome_heat_control.config"];
-                currentConfig = JSON.parse(JSON.stringify(state.attributes));
-                
-                loadGlobal();
-                renderRooms();
-                updateStats();
-
-                // Automatischer Refresh alle 30 Sekunden für Live-Temperaturen
-                setInterval(() => {
-                    hass = window.parent.document.querySelector("home-assistant").hass;
-                    renderRooms();
-                    updateStats();
-                }, 30000);
-
-            } catch (e) { setTimeout(start, 1000); }
-        }
-
-        function getCurrentTemp(sensorId) {
-            if (!sensorId || !hass.states[sensorId]) return "--";
-            const state = hass.states[sensorId].state;
-            return (state !== "unavailable" && state !== "unknown") ? parseFloat(state).toFixed(1) + "°" : "--";
-        }
-
-        function isNightForRoom(room) {
-            const now = new Date().getHours().toString().padStart(2, '0') + ":" + new Date().getMinutes().toString().padStart(2, '0');
-            const ns = (room.night_start || currentConfig.night_start || "22:00").substring(0,5);
-            const ds = (room.day_start || currentConfig.morning_boost_end || "06:00").substring(0,5);
-            return ns > ds ? (now >= ns || now < ds) : (now >= ns && now < ds);
-        }
-
-        function loadGlobal() {
-            const mainSel = document.getElementById('main_thermostat');
-            const entities = Object.keys(hass.states).filter(e => e.startsWith('climate.')).sort();
-            mainSel.innerHTML = entities.map(e => `<option value="${e}" ${e === currentConfig.main_thermostat ? 'selected' : ''}>${e.replace('climate.', '')}</option>`).join('');
-            document.getElementById('global_ns').value = currentConfig.night_start || "22:00";
-            document.getElementById('global_ds').value = currentConfig.morning_boost_end || "06:00";
-        }
-
-        function renderRooms() {
-            const container = document.getElementById('room-container');
-            const entities = Object.keys(hass.states).sort();
-            container.innerHTML = "";
-            
-            Object.entries(currentConfig.rooms).forEach(([id, room]) => {
-                const isEnabled = room.enabled !== false;
-                const nightMode = isNightForRoom(room);
-                const card = document.createElement('div');
-                card.className = `room-card ${isEnabled ? '' : 'disabled'}`;
-                card.innerHTML = `
-                    <div class="room-header">
-                        <span class="room-title">
-                            ${room.label || id}
-                            <span class="mode-badge ${nightMode ? 'mode-night' : 'mode-day'}">${nightMode ? '🌙 Nacht' : '☀️ Tag'}</span>
-                        </span>
-                        <label class="switch">
-                            <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleRoom('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-
-                    <div class="temp-display">
-                        <label>Aktuelle Temperatur</label>
-                        <div class="temp-value">${getCurrentTemp(room.sensor)}</div>
-                    </div>
-                    
-                    <div class="grid-2">
-                        <div><label>Thermostat</label><select onchange="currentConfig.rooms['${id}'].thermostat=this.value" ${isEnabled ? '' : 'disabled'}>${entities.filter(e => e.startsWith('climate.')).map(e => `<option value="${e}" ${e === room.thermostat ? 'selected' : ''}>${e.replace('climate.', '')}</option>`).join('')}</select></div>
-                        <div><label>Sensor</label><select onchange="currentConfig.rooms['${id}'].sensor=this.value" ${isEnabled ? '' : 'disabled'}>${entities.filter(e => e.startsWith('sensor.')).map(e => `<option value="${e}" ${e === room.sensor ? 'selected' : ''}>${e.replace('sensor.', '')}</option>`).join('')}</select></div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div><label>Tag (°C)</label><input type="number" step="0.5" value="${room.target_day}" onchange="currentConfig.rooms['${id}'].target_day=parseFloat(this.value)" ${isEnabled ? '' : 'disabled'}></div>
-                        <div><label>Nacht (°C)</label><input type="number" step="0.5" value="${room.target_night}" onchange="currentConfig.rooms['${id}'].target_night=parseFloat(this.value)" ${isEnabled ? '' : 'disabled'}></div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div><label>Tag-Beginn</label><input type="text" value="${room.day_start || currentConfig.morning_boost_end || '06:00'}" onchange="currentConfig.rooms['${id}'].day_start=this.value" ${isEnabled ? '' : 'disabled'}></div>
-                        <div><label>Nacht-Beginn</label><input type="text" value="${room.night_start || currentConfig.night_start || '22:00'}" onchange="currentConfig.rooms['${id}'].night_start=this.value" ${isEnabled ? '' : 'disabled'}></div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function toggleRoom(id, state) { currentConfig.rooms[id].enabled = state; renderRooms(); }
-
-        function updateStats() {
-            const total = Object.keys(currentConfig.rooms).length;
-            const heating = Object.values(hass.states).filter(s => s.entity_id.startsWith('climate.') && s.attributes.hvac_action === 'heating').length;
-            document.getElementById('stats').innerHTML = `🏠 ${total} Räume konfiguriert | 🔥 ${heating} aktiv am Heizen`;
-        }
-
-        async function saveToHA() {
-            try {
-                await hass.callWS({ type: "smartdome_heat_control/save_config", config: currentConfig });
-                alert("Smartdome Heat: Konfiguration & Sensoren gespeichert!");
-            } catch (err) { alert("Fehler beim Speichern: " + err.message); }
-        }
-
-        window.onload = start;
-    </script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
