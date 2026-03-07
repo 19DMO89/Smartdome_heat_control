@@ -27,6 +27,7 @@ const state = {
   config: structuredClone(DEFAULTS),
   climates: [],
   sensors: [],
+  binarySensors: [],
   allStates: [],
 };
 
@@ -37,6 +38,8 @@ const els = {
   reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
   addRoomBtn: document.getElementById("addRoomBtn"),
   applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
+  toggleVacationBtn: document.getElementById("toggleVacationBtn"),
+  toggleAwayBtn: document.getElementById("toggleAwayBtn"),
   enabled: document.getElementById("enabled"),
   mainThermostat: document.getElementById("main_thermostat"),
   mainSensor: document.getElementById("main_sensor"),
@@ -63,11 +66,13 @@ function setButtonsDisabled(disabled) {
   els.reloadRoomsBtn.disabled = disabled;
   els.addRoomBtn.disabled = disabled;
   els.applyTimesToRoomsBtn.disabled = disabled;
-}
 
-function renderVersion() {
-  if (els.versionBadge) {
-    els.versionBadge.textContent = `Version ${PANEL_VERSION}`;
+  if (els.toggleVacationBtn) {
+    els.toggleVacationBtn.disabled = disabled;
+  }
+
+  if (els.toggleAwayBtn) {
+    els.toggleAwayBtn.disabled = disabled;
   }
 }
 
@@ -100,7 +105,8 @@ function isTemperatureSensor(entity) {
   }
 
   const entityId = entity.entity_id.toLowerCase();
-  const looksLikeTemperature = entityId.includes("temp") || entityId.includes("temperature");
+  const looksLikeTemperature =
+    entityId.includes("temp") || entityId.includes("temperature");
   const numericState = !Number.isNaN(Number(entity.state));
 
   return looksLikeTemperature && numericState;
@@ -134,10 +140,15 @@ function normalizeNumber(value, fallback) {
 
 function normalizeRoom(roomId, room) {
   return {
-    label: typeof room?.label === "string" && room.label.trim() ? room.label.trim() : roomId,
+    label:
+      typeof room?.label === "string" && room.label.trim()
+        ? room.label.trim()
+        : roomId,
     area_id: typeof room?.area_id === "string" ? room.area_id : "",
     thermostat: typeof room?.thermostat === "string" ? room.thermostat : "",
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
+    window_sensor:
+      typeof room?.window_sensor === "string" ? room.window_sensor : "",
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
@@ -154,13 +165,20 @@ function normalizeConfig(input) {
   };
 
   cfg.enabled = cfg.enabled !== false;
-  cfg.main_thermostat = typeof cfg.main_thermostat === "string" ? cfg.main_thermostat : "";
+  cfg.main_thermostat =
+    typeof cfg.main_thermostat === "string" ? cfg.main_thermostat : "";
   cfg.main_sensor = typeof cfg.main_sensor === "string" ? cfg.main_sensor : "";
   cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
   cfg.night_start = normalizeTime(cfg.night_start, DEFAULTS.night_start);
-  cfg.morning_boost_start = normalizeTime(cfg.morning_boost_start, DEFAULTS.morning_boost_start);
-  cfg.morning_boost_end = normalizeTime(cfg.morning_boost_end, DEFAULTS.morning_boost_end);
+  cfg.morning_boost_start = normalizeTime(
+    cfg.morning_boost_start,
+    DEFAULTS.morning_boost_start
+  );
+  cfg.morning_boost_end = normalizeTime(
+    cfg.morning_boost_end,
+    DEFAULTS.morning_boost_end
+  );
   cfg.vacation_enabled = cfg.vacation_enabled === true;
   cfg.vacation_temperature = normalizeNumber(
     cfg.vacation_temperature,
@@ -228,21 +246,62 @@ function isRoomHeating(thermostatId) {
   return false;
 }
 
+function isWindowOpen(windowSensorId) {
+  const sensor = findState(windowSensorId);
+  if (!sensor) {
+    return false;
+  }
+
+  const value = String(sensor.state || "").toLowerCase();
+  return value === "on" || value === "open" || value === "true";
+}
+
 function roomTitleMeta(room) {
   const temp = getSensorTemperature(room.sensor);
   const heating = isRoomHeating(room.thermostat);
+  const windowOpen = isWindowOpen(room.window_sensor);
 
-  let metaParts = [];
+  const metaParts = [];
 
   if (temp !== null) {
-    metaParts.push(`<span class="room-live-temp">${escapeHtml(formatTemperature(temp))}</span>`);
+    metaParts.push(
+      `<span class="room-live-temp">${escapeHtml(formatTemperature(temp))}</span>`
+    );
   }
 
   if (heating) {
-    metaParts.push(`<span class="room-heating" title="Raum heizt gerade">🔥</span>`);
+    metaParts.push(
+      `<span class="room-heating" title="Raum heizt gerade">🔥</span>`
+    );
+  }
+
+  if (windowOpen) {
+    metaParts.push(
+      `<span class="room-window-open" title="Fenster offen">🪟</span>`
+    );
   }
 
   return metaParts.join(" ");
+}
+
+function renderVersion() {
+  if (els.versionBadge) {
+    els.versionBadge.textContent = `Version ${PANEL_VERSION}`;
+  }
+}
+
+function renderModeButtons() {
+  if (els.toggleVacationBtn) {
+    els.toggleVacationBtn.textContent = state.config.vacation_enabled
+      ? "🏖 Urlaub deaktivieren"
+      : "🏖 Urlaub aktivieren";
+  }
+
+  if (els.toggleAwayBtn) {
+    els.toggleAwayBtn.textContent = state.config.away_enabled
+      ? "🚪 Nicht Zuhause deaktivieren"
+      : "🚪 Nicht Zuhause aktivieren";
+  }
 }
 
 async function getHassConnection() {
@@ -283,7 +342,9 @@ async function haFetch(path, options = {}) {
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}${text ? ` – ${text}` : ""}`);
+    throw new Error(
+      `${response.status} ${response.statusText}${text ? ` – ${text}` : ""}`
+    );
   }
 
   return text ? JSON.parse(text) : null;
@@ -333,6 +394,10 @@ async function loadAllStates() {
   state.sensors = sortByEntityId(
     state.allStates.filter((item) => isTemperatureSensor(item))
   );
+
+  state.binarySensors = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("binary_sensor."))
+  );
 }
 
 async function loadConfig() {
@@ -370,25 +435,17 @@ function renderGlobalSettings() {
     els.awayEnabled.checked = cfg.away_enabled;
   }
 
-  buildSelectOptions(
-    els.mainThermostat,
-    state.climates,
-    cfg.main_thermostat,
-    {
-      includeEmpty: true,
-      emptyLabel: "— Bitte wählen —",
-    }
-  );
+  buildSelectOptions(els.mainThermostat, state.climates, cfg.main_thermostat, {
+    includeEmpty: true,
+    emptyLabel: "— Bitte wählen —",
+  });
 
-  buildSelectOptions(
-    els.mainSensor,
-    state.sensors,
-    cfg.main_sensor,
-    {
-      includeEmpty: true,
-      emptyLabel: "— Automatisch / keiner —",
-    }
-  );
+  buildSelectOptions(els.mainSensor, state.sensors, cfg.main_sensor, {
+    includeEmpty: true,
+    emptyLabel: "— Automatisch / keiner —",
+  });
+
+  renderModeButtons();
 }
 
 function createRoomCard(roomId, room) {
@@ -441,6 +498,11 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
+        <label>Fensterkontakt</label>
+        <select class="room-window-sensor"></select>
+      </div>
+
+      <div class="field">
         <label>Zieltemperatur Tag (°C)</label>
         <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_day)}" />
       </div>
@@ -469,20 +531,27 @@ function createRoomCard(roomId, room) {
 
   const thermostatSelect = wrapper.querySelector(".room-thermostat");
   const sensorSelect = wrapper.querySelector(".room-sensor");
+  const windowSensorSelect = wrapper.querySelector(".room-window-sensor");
   const deleteBtn = wrapper.querySelector(".room-delete-btn");
 
-  buildSelectOptions(
-    thermostatSelect,
-    state.climates,
-    room.thermostat || "",
-    { includeEmpty: true, emptyLabel: "— Nicht gesetzt —" }
-  );
+  buildSelectOptions(thermostatSelect, state.climates, room.thermostat || "", {
+    includeEmpty: true,
+    emptyLabel: "— Nicht gesetzt —",
+  });
+
+  buildSelectOptions(sensorSelect, state.sensors, room.sensor || "", {
+    includeEmpty: true,
+    emptyLabel: "— Nicht gesetzt —",
+  });
 
   buildSelectOptions(
-    sensorSelect,
-    state.sensors,
-    room.sensor || "",
-    { includeEmpty: true, emptyLabel: "— Nicht gesetzt —" }
+    windowSensorSelect,
+    state.binarySensors,
+    room.window_sensor || "",
+    {
+      includeEmpty: true,
+      emptyLabel: "— Nicht gesetzt —",
+    }
   );
 
   deleteBtn.addEventListener("click", () => {
@@ -527,9 +596,14 @@ function collectFormState() {
     els.morningBoostEnd.value,
     DEFAULTS.morning_boost_end
   );
-  cfg.vacation_enabled = els.vacationEnabled ? els.vacationEnabled.checked : false;
+  cfg.vacation_enabled = els.vacationEnabled
+    ? els.vacationEnabled.checked
+    : false;
   cfg.vacation_temperature = els.vacationTemperature
-    ? normalizeNumber(els.vacationTemperature.value, DEFAULTS.vacation_temperature)
+    ? normalizeNumber(
+        els.vacationTemperature.value,
+        DEFAULTS.vacation_temperature
+      )
     : DEFAULTS.vacation_temperature;
   cfg.away_enabled = els.awayEnabled ? els.awayEnabled.checked : false;
 
@@ -544,6 +618,7 @@ function collectFormState() {
       area_id: node.querySelector(".room-area-id").value.trim(),
       thermostat: node.querySelector(".room-thermostat").value || "",
       sensor: node.querySelector(".room-sensor").value || "",
+      window_sensor: node.querySelector(".room-window-sensor").value || "",
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
       away_temperature: node.querySelector(".room-away-temperature").value,
@@ -568,6 +643,7 @@ function addRoom() {
     area_id: "",
     thermostat: "",
     sensor: "",
+    window_sensor: "",
     target_day: 21.0,
     target_night: 18.0,
     away_temperature: 17.0,
@@ -587,7 +663,10 @@ function applyGlobalTimesToAllRooms() {
 
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
   if (!roomNodes.length) {
-    setStatus("Keine Räume vorhanden, auf die Zeiten angewendet werden können.", "warn");
+    setStatus(
+      "Keine Räume vorhanden, auf die Zeiten angewendet werden können.",
+      "warn"
+    );
     return;
   }
 
@@ -601,6 +680,66 @@ function applyGlobalTimesToAllRooms() {
 
   state.config = collectFormState();
   setStatus("Globale Zeiten wurden in alle Räume übernommen.", "ok");
+}
+
+async function toggleVacationMode() {
+  try {
+    setButtonsDisabled(true);
+
+    const newValue = !state.config.vacation_enabled;
+
+    await callService(DOMAIN, "update_config", {
+      config: {
+        vacation_enabled: newValue,
+      },
+    });
+
+    await refreshAll();
+    setStatus(
+      newValue
+        ? "Urlaubsmodus aktiviert."
+        : "Urlaubsmodus deaktiviert.",
+      "ok"
+    );
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      `Urlaubsmodus konnte nicht geändert werden: ${error.message}`,
+      "err"
+    );
+  } finally {
+    setButtonsDisabled(false);
+  }
+}
+
+async function toggleAwayMode() {
+  try {
+    setButtonsDisabled(true);
+
+    const newValue = !state.config.away_enabled;
+
+    await callService(DOMAIN, "update_config", {
+      config: {
+        away_enabled: newValue,
+      },
+    });
+
+    await refreshAll();
+    setStatus(
+      newValue
+        ? "Nicht-Zuhause-Modus aktiviert."
+        : "Nicht-Zuhause-Modus deaktiviert.",
+      "ok"
+    );
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      `Nicht-Zuhause-Modus konnte nicht geändert werden: ${error.message}`,
+      "err"
+    );
+  } finally {
+    setButtonsDisabled(false);
+  }
 }
 
 async function saveConfig() {
@@ -671,7 +810,18 @@ function bindEvents() {
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
   els.reloadConfigBtn.addEventListener("click", reloadConfig);
   els.addRoomBtn.addEventListener("click", addRoom);
-  els.applyTimesToRoomsBtn.addEventListener("click", applyGlobalTimesToAllRooms);
+  els.applyTimesToRoomsBtn.addEventListener(
+    "click",
+    applyGlobalTimesToAllRooms
+  );
+
+  if (els.toggleVacationBtn) {
+    els.toggleVacationBtn.addEventListener("click", toggleVacationMode);
+  }
+
+  if (els.toggleAwayBtn) {
+    els.toggleAwayBtn.addEventListener("click", toggleAwayMode);
+  }
 }
 
 async function init() {
