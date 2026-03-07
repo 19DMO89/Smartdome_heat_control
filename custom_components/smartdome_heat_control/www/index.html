@@ -52,6 +52,18 @@
       flex-wrap: wrap;
     }
 
+    .title-block h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .title-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .version-badge {
       margin-top: 10px;
       display: inline-flex;
@@ -63,18 +75,6 @@
       font-size: 12px;
       color: var(--muted);
       background: rgba(255, 255, 255, 0.03);
-    }
-
-    .title-block h1 {
-      margin: 0 0 6px;
-      font-size: 28px;
-      font-weight: 700;
-    }
-
-    .title-block p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
     }
 
     .actions {
@@ -91,6 +91,12 @@
     .room-heating {
       font-size: 16px;
       line-height: 1;
+    }
+
+    .room-window-open {
+      font-size: 16px;
+      line-height: 1;
+      filter: drop-shadow(0 0 4px rgba(77, 163, 255, 0.2));
     }
 
     button {
@@ -366,7 +372,7 @@
 <body>
   <div class="wrap">
     <div class="header">
-     <div class="title-block">
+      <div class="title-block">
         <h1>Smartdome Heat Control</h1>
         <p>Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.</p>
         <div class="version-badge" id="versionBadge">Version</div>
@@ -414,6 +420,11 @@
               </div>
               <input id="away_enabled" type="checkbox" />
             </div>
+          </div>
+
+          <div class="sub-actions" style="margin-bottom: 16px;">
+            <button id="toggleVacationBtn" type="button" class="ghost">🏖 Urlaub aktivieren</button>
+            <button id="toggleAwayBtn" type="button" class="ghost">🚪 Nicht Zuhause aktivieren</button>
           </div>
 
           <div class="fields">
