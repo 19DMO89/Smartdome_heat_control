@@ -1,7 +1,6 @@
 """Config Flow für Smartdome Heat Control."""
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Any
 
@@ -36,8 +35,6 @@ from .const import (
     DOMAIN,
 )
 from .helpers import async_discover_rooms
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _temperature_sensor_selector() -> selector.EntitySelector:
@@ -179,7 +176,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> SmartdomeOptionsFlow:
+    ) -> "SmartdomeOptionsFlow":
         """Options Flow zurückgeben."""
         return SmartdomeOptionsFlow(config_entry)
 
@@ -235,7 +232,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
         data = self._entry.data
 
         if user_input is not None:
-            new_data = {**data, **user_input}
+            new_data = {**data, **user_input, CONF_ROOMS: self._rooms}
             self.hass.config_entries.async_update_entry(self._entry, data=new_data)
             return self.async_create_entry(title="", data={})
 
@@ -354,7 +351,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
             if user_input.get("delete_room"):
                 del self._rooms[room_id]
             else:
-                updated_room = {
+                self._rooms[room_id] = {
                     **room,
                     CONF_ROOM_LABEL: user_input[CONF_ROOM_LABEL],
                     CONF_ROOM_THERMOSTAT: user_input.get(CONF_ROOM_THERMOSTAT),
@@ -369,7 +366,6 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     ),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
                 }
-                self._rooms[room_id] = updated_room
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
             self.hass.config_entries.async_update_entry(self._entry, data=new_data)
