@@ -18,8 +18,10 @@ from .const import (
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
+    CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
     CONF_ROOM_LABEL,
+    CONF_ROOM_NIGHT_START,
     CONF_ROOM_SENSOR,
     CONF_ROOM_TARGET_DAY,
     CONF_ROOM_TARGET_NIGHT,
@@ -38,7 +40,6 @@ from .helpers import async_discover_rooms
 
 
 def _temperature_sensor_selector() -> selector.EntitySelector:
-    """Selector für Temperatursensoren."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain="sensor",
@@ -49,7 +50,6 @@ def _temperature_sensor_selector() -> selector.EntitySelector:
 
 
 def _climate_selector() -> selector.EntitySelector:
-    """Selector für Climate-Entities."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain="climate",
@@ -63,7 +63,6 @@ def _temp_number_selector(
     maximum: float,
     step: float,
 ) -> selector.NumberSelector:
-    """Selector für Temperaturwerte."""
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=minimum,
@@ -76,8 +75,6 @@ def _temp_number_selector(
 
 
 class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config Flow: Schritt-für-Schritt Einrichtung."""
-
     VERSION = 1
 
     def __init__(self) -> None:
@@ -88,7 +85,6 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Schritt 1: Hauptthermostat & globale Parameter."""
         if user_input is not None:
             self._data.update(user_input)
             self._discovered_rooms = await async_discover_rooms(self.hass)
@@ -98,10 +94,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_MAIN_THERMOSTAT): _climate_selector(),
                 vol.Optional(CONF_MAIN_SENSOR): _temperature_sensor_selector(),
-                vol.Optional(
-                    CONF_BOOST_DELTA,
-                    default=DEFAULT_BOOST_DELTA,
-                ): selector.NumberSelector(
+                vol.Optional(CONF_BOOST_DELTA, default=DEFAULT_BOOST_DELTA): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.5,
                         max=5.0,
@@ -110,10 +103,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode="slider",
                     )
                 ),
-                vol.Optional(
-                    CONF_TOLERANCE,
-                    default=DEFAULT_TOLERANCE,
-                ): selector.NumberSelector(
+                vol.Optional(CONF_TOLERANCE, default=DEFAULT_TOLERANCE): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.1,
                         max=2.0,
@@ -122,10 +112,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode="slider",
                     )
                 ),
-                vol.Optional(
-                    CONF_NIGHT_START,
-                    default=DEFAULT_NIGHT_START,
-                ): selector.TimeSelector(),
+                vol.Optional(CONF_NIGHT_START, default=DEFAULT_NIGHT_START): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_START,
                     default=DEFAULT_MORNING_BOOST_START,
@@ -137,16 +124,12 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-        )
+        return self.async_show_form(step_id="user", data_schema=schema)
 
     async def async_step_rooms(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Schritt 2: Erkannte Räume bestätigen."""
         if user_input is not None:
             self._data[CONF_ROOMS] = self._discovered_rooms
             return self.async_create_entry(
@@ -161,11 +144,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="rooms",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("confirm", default=True): bool,
-                }
-            ),
+            data_schema=vol.Schema({vol.Required("confirm", default=True): bool}),
             description_placeholders={
                 "room_count": str(len(self._discovered_rooms)),
                 "room_names": room_names,
@@ -177,25 +156,19 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> "SmartdomeOptionsFlow":
-        """Options Flow zurückgeben."""
         return SmartdomeOptionsFlow(config_entry)
 
 
 class SmartdomeOptionsFlow(config_entries.OptionsFlow):
-    """Options Flow: Nachträgliche Konfiguration über Einstellungen."""
-
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
-        self._rooms: dict[str, dict[str, Any]] = dict(
-            config_entry.data.get(CONF_ROOMS, {})
-        )
+        self._rooms: dict[str, dict[str, Any]] = dict(config_entry.data.get(CONF_ROOMS, {}))
         self._edit_room_id: str | None = None
 
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Hauptmenü der Einstellungen."""
         if user_input is not None:
             action = user_input.get("action")
 
@@ -228,7 +201,6 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Globale Werte ändern."""
         data = self._entry.data
 
         if user_input is not None:
@@ -276,31 +248,21 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 ): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_START,
-                    default=data.get(
-                        CONF_MORNING_BOOST_START,
-                        DEFAULT_MORNING_BOOST_START,
-                    ),
+                    default=data.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START),
                 ): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_END,
-                    default=data.get(
-                        CONF_MORNING_BOOST_END,
-                        DEFAULT_MORNING_BOOST_END,
-                    ),
+                    default=data.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END),
                 ): selector.TimeSelector(),
             }
         )
 
-        return self.async_show_form(
-            step_id="global",
-            data_schema=schema,
-        )
+        return self.async_show_form(step_id="global", data_schema=schema)
 
     async def async_step_rooms_list(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Liste aller Räume zur Auswahl."""
         if user_input is not None:
             action = user_input.get("room_action")
 
@@ -312,25 +274,17 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_edit_room()
 
         room_options = [
-            {
-                "value": room_id,
-                "label": f"✏️ {room.get(CONF_ROOM_LABEL, room_id)}",
-            }
+            {"value": room_id, "label": f"✏️ {room.get(CONF_ROOM_LABEL, room_id)}"}
             for room_id, room in self._rooms.items()
         ]
-        room_options.append(
-            {"value": "__add__", "label": "➕ Neuen Raum hinzufügen"}
-        )
+        room_options.append({"value": "__add__", "label": "➕ Neuen Raum hinzufügen"})
 
         return self.async_show_form(
             step_id="rooms_list",
             data_schema=vol.Schema(
                 {
                     vol.Required("room_action"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=room_options,
-                            mode="list",
-                        )
+                        selector.SelectSelectorConfig(options=room_options, mode="list")
                     )
                 }
             ),
@@ -340,7 +294,6 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Raum bearbeiten oder löschen."""
         room_id = self._edit_room_id
         if room_id is None or room_id not in self._rooms:
             return await self.async_step_rooms_list()
@@ -356,14 +309,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_LABEL: user_input[CONF_ROOM_LABEL],
                     CONF_ROOM_THERMOSTAT: user_input.get(CONF_ROOM_THERMOSTAT),
                     CONF_ROOM_SENSOR: user_input.get(CONF_ROOM_SENSOR),
-                    CONF_ROOM_TARGET_DAY: user_input.get(
-                        CONF_ROOM_TARGET_DAY,
-                        DEFAULT_TARGET_DAY,
-                    ),
-                    CONF_ROOM_TARGET_NIGHT: user_input.get(
-                        CONF_ROOM_TARGET_NIGHT,
-                        DEFAULT_TARGET_NIGHT,
-                    ),
+                    CONF_ROOM_TARGET_DAY: user_input.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
+                    CONF_ROOM_TARGET_NIGHT: user_input.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
+                    CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
+                    CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
                 }
 
@@ -373,10 +322,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_ROOM_LABEL,
-                    default=room.get(CONF_ROOM_LABEL, ""),
-                ): str,
+                vol.Required(CONF_ROOM_LABEL, default=room.get(CONF_ROOM_LABEL, "")): str,
                 vol.Optional(
                     CONF_ROOM_THERMOSTAT,
                     default=room.get(CONF_ROOM_THERMOSTAT, ""),
@@ -394,6 +340,14 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     default=room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
                 ): _temp_number_selector(5.0, 30.0, 0.5),
                 vol.Optional(
+                    CONF_ROOM_DAY_START,
+                    default=room.get(CONF_ROOM_DAY_START, ""),
+                ): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_ROOM_NIGHT_START,
+                    default=room.get(CONF_ROOM_NIGHT_START, ""),
+                ): selector.TimeSelector(),
+                vol.Optional(
                     CONF_ROOM_ENABLED,
                     default=room.get(CONF_ROOM_ENABLED, True),
                 ): bool,
@@ -401,30 +355,22 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
             }
         )
 
-        return self.async_show_form(
-            step_id="edit_room",
-            data_schema=schema,
-        )
+        return self.async_show_form(step_id="edit_room", data_schema=schema)
 
     async def async_step_add_room(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manuell einen Raum hinzufügen."""
         if user_input is not None:
             new_room_id = f"room_{uuid.uuid4().hex[:8]}"
             self._rooms[new_room_id] = {
                 CONF_ROOM_LABEL: user_input[CONF_ROOM_LABEL],
                 CONF_ROOM_THERMOSTAT: user_input.get(CONF_ROOM_THERMOSTAT),
                 CONF_ROOM_SENSOR: user_input.get(CONF_ROOM_SENSOR),
-                CONF_ROOM_TARGET_DAY: user_input.get(
-                    CONF_ROOM_TARGET_DAY,
-                    DEFAULT_TARGET_DAY,
-                ),
-                CONF_ROOM_TARGET_NIGHT: user_input.get(
-                    CONF_ROOM_TARGET_NIGHT,
-                    DEFAULT_TARGET_NIGHT,
-                ),
+                CONF_ROOM_TARGET_DAY: user_input.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
+                CONF_ROOM_TARGET_NIGHT: user_input.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
+                CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
+                CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                 CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
             }
 
@@ -439,18 +385,11 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_ROOM_LABEL): str,
                     vol.Optional(CONF_ROOM_THERMOSTAT): _climate_selector(),
                     vol.Optional(CONF_ROOM_SENSOR): _temperature_sensor_selector(),
-                    vol.Optional(
-                        CONF_ROOM_TARGET_DAY,
-                        default=DEFAULT_TARGET_DAY,
-                    ): _temp_number_selector(5.0, 30.0, 0.5),
-                    vol.Optional(
-                        CONF_ROOM_TARGET_NIGHT,
-                        default=DEFAULT_TARGET_NIGHT,
-                    ): _temp_number_selector(5.0, 30.0, 0.5),
-                    vol.Optional(
-                        CONF_ROOM_ENABLED,
-                        default=True,
-                    ): bool,
+                    vol.Optional(CONF_ROOM_TARGET_DAY, default=DEFAULT_TARGET_DAY): _temp_number_selector(5.0, 30.0, 0.5),
+                    vol.Optional(CONF_ROOM_TARGET_NIGHT, default=DEFAULT_TARGET_NIGHT): _temp_number_selector(5.0, 30.0, 0.5),
+                    vol.Optional(CONF_ROOM_DAY_START, default=""): selector.TimeSelector(),
+                    vol.Optional(CONF_ROOM_NIGHT_START, default=""): selector.TimeSelector(),
+                    vol.Optional(CONF_ROOM_ENABLED, default=True): bool,
                 }
             ),
         )
@@ -459,15 +398,11 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Neu-Erkennung von Räumen."""
         discovered = await async_discover_rooms(self.hass)
 
         for room_id, room_data in discovered.items():
             if room_id not in self._rooms:
                 self._rooms[room_id] = room_data
-                self._rooms[room_id].setdefault(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY)
-                self._rooms[room_id].setdefault(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT)
-                self._rooms[room_id].setdefault(CONF_ROOM_ENABLED, True)
 
         new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
         self.hass.config_entries.async_update_entry(self._entry, data=new_data)
