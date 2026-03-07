@@ -1,4 +1,6 @@
-# `<img src="https://raw.githubusercontent.com" width="48" align="center">`{=html} Smartdome Heat Control
+<p align="center">
+<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/images/icon.png" width="96">
+</p>
 
 [![HACS
 Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)\
