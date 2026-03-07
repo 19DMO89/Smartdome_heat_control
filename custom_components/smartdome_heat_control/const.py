@@ -7,6 +7,12 @@ DATA_ENABLED = "enabled"
 
 PLATFORMS = ["switch"]
 
+# Services
+SERVICE_UPDATE_CONFIG = "update_config"
+SERVICE_ADD_ROOM = "add_room"
+SERVICE_REMOVE_ROOM = "remove_room"
+SERVICE_RELOAD = "reload"
+
 # Config-Keys
 CONF_MAIN_THERMOSTAT = "main_thermostat"
 CONF_MAIN_SENSOR = "main_sensor"
