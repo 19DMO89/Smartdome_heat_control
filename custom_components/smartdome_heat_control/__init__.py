@@ -174,6 +174,7 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "area_id": room.get("area_id", ""),
             "thermostat": room.get("thermostat", ""),
             "sensor": room.get("sensor", ""),
+            "window_sensor": room.get("window_sensor", ""),
             "target_day": room.get("target_day", 21.0),
             "target_night": room.get("target_night", 18.0),
             "away_temperature": room.get(
@@ -290,6 +291,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 "area_id": call.data.get("area_id", ""),
                 "thermostat": call.data.get("thermostat", ""),
                 "sensor": call.data.get("sensor", ""),
+                "window_sensor": call.data.get("window_sensor", ""),
                 "target_day": call.data.get("target_day", 21.0),
                 "target_night": call.data.get("target_night", 18.0),
                 "away_temperature": call.data.get(
@@ -366,6 +368,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
                     discovered_room.get("thermostat", ""),
                 ),
                 "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
+                "window_sensor": existing.get(
+                    "window_sensor",
+                    discovered_room.get("window_sensor", ""),
+                ),
                 "target_day": existing.get(
                     "target_day",
                     discovered_room.get("target_day", 21.0),
