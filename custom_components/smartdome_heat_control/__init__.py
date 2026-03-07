@@ -123,6 +123,40 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
         hass.data[DOMAIN]["_frontend_registered"] = True
 
 
+def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
+    """Räume normalisieren, damit keine Felder verloren gehen."""
+    if not isinstance(rooms, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+
+    for room_id, room in rooms.items():
+        if not isinstance(room, dict):
+            continue
+
+        normalized[room_id] = {
+            "label": room.get("label", room_id),
+            "area_id": room.get("area_id", ""),
+            "thermostat": room.get("thermostat", ""),
+            "sensor": room.get("sensor", ""),
+            "target_day": room.get("target_day", 21.0),
+            "target_night": room.get("target_night", 18.0),
+            "day_start": room.get("day_start", ""),
+            "night_start": room.get("night_start", ""),
+            "enabled": room.get("enabled", True),
+        }
+
+    return normalized
+
+
+def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Gesamte Config normalisieren."""
+    normalized = dict(cfg)
+    normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
+    return normalized
+
+
 def _async_register_ws_save_config(hass: HomeAssistant) -> None:
     """WebSocket-Command für direktes Speichern aus dem Web-Panel registrieren."""
     command_type = f"{DOMAIN}/save_config"
@@ -149,8 +183,8 @@ def _async_register_ws_save_config(hass: HomeAssistant) -> None:
 
         data = hass.data[DOMAIN][target_entry.entry_id]
         controller = data[DATA_CONTROLLER]
-        new_cfg = dict(msg["config"])
-        new_cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+
+        new_cfg = _normalize_config(dict(msg["config"]))
 
         hass.config_entries.async_update_entry(target_entry, data=new_cfg)
         data["config"] = new_cfg
@@ -177,20 +211,20 @@ def _async_register_services(hass: HomeAssistant) -> None:
             return
 
         data = hass.data[DOMAIN][target_entry.entry_id]
-        cfg = dict(data["config"])
-        patch = call.data.get("config", {})
+        current_cfg = dict(data["config"])
+        patch = dict(call.data.get("config", {}))
 
-        deep_merge(cfg, patch)
-        cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+        deep_merge(current_cfg, patch)
+        current_cfg = _normalize_config(current_cfg)
 
-        hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
-        data["config"] = cfg
+        hass.config_entries.async_update_entry(target_entry, data=current_cfg)
+        data["config"] = current_cfg
 
         controller = data[DATA_CONTROLLER]
-        controller.update_config(cfg)
-        controller.set_enabled(bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
+        controller.update_config(current_cfg)
+        controller.set_enabled(bool(current_cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
 
-        _push_state(hass, cfg)
+        _push_state(hass, current_cfg)
 
     async def handle_add_room(call: ServiceCall) -> None:
         target_entry = _get_single_entry(hass)
@@ -218,7 +252,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 "enabled": call.data.get("enabled", True),
             }
 
-        hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
+        cfg = _normalize_config(cfg)
+
+        hass.config_entries.async_update_entry(target_entry, data=cfg)
         data["config"] = cfg
 
         controller = data[DATA_CONTROLLER]
@@ -239,7 +275,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         if room_id and room_id in cfg.get(CONF_ROOMS, {}):
             del cfg[CONF_ROOMS][room_id]
 
-            hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
+            cfg = _normalize_config(cfg)
+
+            hass.config_entries.async_update_entry(target_entry, data=cfg)
             data["config"] = cfg
 
             controller = data[DATA_CONTROLLER]
@@ -256,14 +294,30 @@ def _async_register_services(hass: HomeAssistant) -> None:
         data = hass.data[DOMAIN][target_entry.entry_id]
         cfg = dict(data["config"])
 
-        new_rooms = await async_discover_rooms(hass)
-        rooms = cfg.setdefault(CONF_ROOMS, {})
+        discovered_rooms = await async_discover_rooms(hass)
+        existing_rooms = cfg.setdefault(CONF_ROOMS, {})
 
-        for room_id, room_data in new_rooms.items():
-            if room_id not in rooms:
-                rooms[room_id] = room_data
+        for room_id, discovered_room in discovered_rooms.items():
+            if room_id not in existing_rooms:
+                existing_rooms[room_id] = discovered_room
+                continue
 
-        hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
+            existing = existing_rooms[room_id]
+            existing_rooms[room_id] = {
+                "label": existing.get("label", discovered_room.get("label", room_id)),
+                "area_id": existing.get("area_id", discovered_room.get("area_id", "")),
+                "thermostat": existing.get("thermostat", discovered_room.get("thermostat", "")),
+                "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
+                "target_day": existing.get("target_day", discovered_room.get("target_day", 21.0)),
+                "target_night": existing.get("target_night", discovered_room.get("target_night", 18.0)),
+                "day_start": existing.get("day_start", ""),
+                "night_start": existing.get("night_start", ""),
+                "enabled": existing.get("enabled", True),
+            }
+
+        cfg = _normalize_config(cfg)
+
+        hass.config_entries.async_update_entry(target_entry, data=cfg)
         data["config"] = cfg
 
         controller = data[DATA_CONTROLLER]
@@ -303,8 +357,7 @@ def _get_single_entry(hass: HomeAssistant) -> ConfigEntry | None:
 
 def _push_state(hass: HomeAssistant, cfg: dict[str, Any]) -> None:
     """Globalen UI-State aktualisieren."""
-    state_cfg = dict(cfg)
-    state_cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    state_cfg = _normalize_config(cfg)
 
     hass.states.async_set(
         f"{DOMAIN}.config",
