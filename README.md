@@ -10,338 +10,252 @@ Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](http
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Die professionelle Heizungssteuerung für Home Assistant.\
-**Smartdome Heat Control** kombiniert automatische Raumerkennung mit
-einem dedizierten Management‑Dashboard direkt in deiner Seitenleiste.
+Smartdome Heat Control is an advanced **multi‑room heating controller
+for Home Assistant** designed for heating systems that use:
 
-Die Integration synchronisiert **Hauptthermostat und Raumthermostate**,
-um effizient zu heizen und gleichzeitig Energie zu sparen.
+-   **one main thermostat controlling the heating system**
+-   **multiple radiator thermostats controlling individual rooms**
 
-------------------------------------------------------------------------
+The integration coordinates the main thermostat and room thermostats to
+distribute heat efficiently across your home.
 
-# ✨ Features
-
-## 🖥️ Eigenes Dashboard
-
-Verwalte alle Räume und Einstellungen direkt über einen neuen Eintrag in
-der Home‑Assistant‑Seitenleiste.
-
----
-
-## 📸 Dashboard
-
-### Grundansicht
-
-<p align="center">
-<img src="images/Grundansicht.png" width="900">
-</p>
-
-Übersicht über alle Räume, aktuelle Temperaturen und Heizstatus.  
-Hier kannst du Räume aktivieren/deaktivieren und schnell erkennen, welcher Raum gerade heizt 🔥.
-
----
-
-### Raum Einstellungen
-
-<p align="center">
-<img src="images/raum.png" width="900">
-</p>
-
-Konfiguration eines einzelnen Raums:
-
-- Thermostat auswählen
-- Temperatursensor wählen
-- Zieltemperaturen für Tag und Nacht
-- individuelle Zeitsteuerung
-
----
-
-### Globale Einstellungen
-
-<p align="center">
-<img src="images/Maineinstellung.png" width="900">
-</p>
-
-Globale Parameter für die Heizungssteuerung:
-
-- Hauptthermostat
-- Hauptsensor
-- Boost-Delta
-- Temperaturtoleranz
-- globale Tag- und Nachtzeiten
-------------------------------------------------------------------------
-
-## 🏠 Automatische Raumerkennung
-
-Die Integration liest deine **Home Assistant Areas** aus und erkennt
-automatisch:
-
--   Thermostate (`climate.*`)
--   Temperatursensoren (`sensor.*`)
-
-Räume können jederzeit neu erkannt werden.
+Instead of letting thermostats operate independently, Smartdome ensures
+the heating system produces heat **only when a room actually needs it**.
 
 ------------------------------------------------------------------------
 
-## ➕ Dynamische Raumverwaltung
+# How It Works
 
-Direkt im Dashboard möglich:
+Smartdome uses a **central heating logic**.
 
--   Räume hinzufügen
--   Räume löschen
--   Thermostat auswählen
--   Sensor auswählen
--   Raum aktiv / deaktivieren
+1.  Each room measures its temperature using a sensor.
+2.  If a room needs heat:
+    -   the **room thermostat opens the radiator**
+    -   the **main thermostat boosts the heating system**
+3.  When the room reaches its target temperature:
+    -   the radiator thermostat closes again
 
-------------------------------------------------------------------------
+Example:
 
-## 🌡️ Live‑Temperaturanzeige
+    Living room too cold
+    → radiator thermostat opens
+    → main thermostat boosts heating
 
-Im Dashboard wird neben jedem Raum die aktuelle Temperatur angezeigt.
-
-Beispiel:
-
-    Esszimmer   21.4°C
-
-Die Temperatur stammt direkt vom ausgewählten Sensor.
-
-------------------------------------------------------------------------
-
-## 🔥 Heizstatus Anzeige
-
-Wenn ein Raum gerade heizt, erscheint ein **Flammensymbol**.
-
-Beispiel:
-
-    Esszimmer   21.4°C 🔥
-
-Die Anzeige basiert auf:
-
-    climate.* → hvac_action = heating
+    Bathroom already warm
+    → radiator thermostat closes
+    → no additional heating needed
 
 ------------------------------------------------------------------------
 
-## 🕒 Individuelle Zeitsteuerung pro Raum
+# Features
 
-Jeder Raum kann eigene Zeiten besitzen:
+### Smart Room Heating
 
-  Einstellung   Beschreibung
-  ------------- ---------------------------
-  Tag Start     Beginn der Tagtemperatur
-  Nacht Start   Beginn der Nachtabsenkung
+Each room can have its own:
 
-Damit können Räume unterschiedliche Heizzeiten haben.
-
-------------------------------------------------------------------------
-
-## 📋 Globale Zeiten übernehmen
-
-Im Dashboard gibt es einen Button:
-
-    Globale Zeiten in alle Räume übernehmen
-
-Damit werden automatisch gesetzt:
-
-    Tag Start = globale Tagzeit
-    Nacht Start = globale Nachtzeit
-
-Ideal wenn nur einzelne Räume abweichen sollen.
+-   radiator thermostat
+-   temperature sensor
+-   day/night schedule
+-   window contact sensor
+-   away temperature
 
 ------------------------------------------------------------------------
 
-## 🌙 Intelligente Absenkung
+### Window Open Detection
 
-Räume ohne Wärmebedarf werden automatisch reduziert, damit sie **nicht
-unnötig mitheizen**.
+If a window in a room is opened:
 
-Das spart Energie und verhindert Überheizen.
+-   heating in that room pauses automatically
+-   the thermostat is lowered to minimum temperature
+-   heating resumes automatically when the window closes
 
-------------------------------------------------------------------------
-
-## 🎯 Präzise Ventilsteuerung
-
-Wenn ein Raum zu kalt ist:
-
-    Raumthermostat = Soll + Boost
-
-Andere Räume werden automatisch reduziert.
+A delay prevents the system from reacting to short ventilation.
 
 ------------------------------------------------------------------------
 
-## 🔧 Hauptthermostat‑Steuerung
+### Vacation Mode
 
-Wenn **ein Raum Wärme benötigt**:
+Vacation mode lowers heating for longer absences.
 
-    Hauptthermostat = max(Sollwerte) + Boost
+Entities:
 
-Dadurch wird die Heizung nur aktiviert wenn tatsächlich Bedarf besteht.
-
-------------------------------------------------------------------------
-
-## ⚡ Optimierter Home Assistant Start
-
-Der Heizcontroller startet erst nach:
-
-    EVENT_HOMEASSISTANT_STARTED
-
-Dadurch wird der **Start von Home Assistant nicht verzögert**.
+    switch.smartdome_heat_control_vacation_mode
+    number.smartdome_heat_control_vacation_temperature
 
 ------------------------------------------------------------------------
 
-## 📱 Lovelace Integration
+### Away Mode
 
-Die Integration ist perfekt abgestimmt auf:
+Away mode is designed for short absences.
 
-**Smartdome Heat Card**\
-https://github.com/19DMO89/smartdome_heat_card
+Entity:
 
-------------------------------------------------------------------------
-
-# 📋 Voraussetzungen
-
--   Home Assistant **2024.1 oder neuer**
--   Ein zentrales `climate.*` Thermostat (Heizanlage)
--   Optionale Heizkörperthermostate (`climate.*`)
--   Optionale Temperatursensoren (`sensor.*`) pro Raum
+    switch.smartdome_heat_control_away_mode
 
 ------------------------------------------------------------------------
 
-# 🚀 Installation via HACS
+# Dashboard
 
-1.  Öffne **HACS → Integrationen**
-2.  Drei Punkte **⋮ → Benutzerdefinierte Repositorys**
-3.  Repository hinzufügen:
+## Main Interface
+
+![Smartdome UI](images/ui.png)
+
+The main dashboard provides an overview of all heating settings and
+rooms.
+
+------------------------------------------------------------------------
+
+## Global Settings
+
+![Global Settings](images/global.png)
+
+Global settings allow configuring:
+
+-   main thermostat
+-   boost delta
+-   temperature tolerance
+-   day/night times
+-   controller enable/disable
+
+------------------------------------------------------------------------
+
+## Room Configuration
+
+![Room View](images/room.png)
+
+Each room can be configured individually with:
+
+-   thermostat
+-   temperature sensor
+-   window sensor
+-   day/night temperatures
+-   schedules
+-   enabled state
+
+------------------------------------------------------------------------
+
+# Installation
+
+### HACS (Recommended)
+
+1.  Open **HACS**
+2.  Go to **Integrations**
+3.  Click **Custom repositories**
+4.  Add this repository:
 
 ```{=html}
 <!-- -->
 ```
     https://github.com/19DMO89/smartdome_heat_control
 
-Kategorie:
+Category:
 
     Integration
 
-4.  **Smartdome Heat Control installieren**
-5.  **Home Assistant neu starten**
+5.  Install **Smartdome Heat Control**
+6.  Restart Home Assistant
 
 ------------------------------------------------------------------------
 
-# ⚙️ Einrichtung & Dashboard
+# Configuration
 
-## 1️⃣ Integration hinzufügen
+After installation:
 
-    Einstellungen
-    → Geräte & Dienste
-    → Integration hinzufügen
-    → Smartdome Heat Control
+Settings → Devices & Services → Add Integration
+
+Search for:
+
+    Smartdome Heat Control
+
+Setup requires:
+
+-   main thermostat
+-   optional main temperature sensor
+
+Rooms can then be discovered automatically or configured manually.
 
 ------------------------------------------------------------------------
 
-## 2️⃣ Smartdome Panel
+# Home Assistant Entities
 
-Nach der Installation erscheint in der **Sidebar**:
+### Switches
 
-    Smartdome Heat
+    switch.smartdome_heat_control_enabled
+    switch.smartdome_heat_control_away_mode
+    switch.smartdome_heat_control_vacation_mode
 
-Dort kannst du:
+### Numbers
+
+    number.smartdome_heat_control_vacation_temperature
+
+### State Entity
+
+    smartdome_heat_control.config
+
+------------------------------------------------------------------------
+
+# Smartdome Heat Control (Deutsch)
+
+Smartdome Heat Control ist eine **intelligente Heizungssteuerung für
+Home Assistant** für Heizsysteme mit:
+
+-   **einem Hauptthermostat für die Heizungsanlage**
+-   **mehreren Heizkörperthermostaten für einzelne Räume**
+
+Die Integration koordiniert Hauptthermostat und Raumthermostate, damit
+Wärme effizient im Haus verteilt wird.
+
+------------------------------------------------------------------------
+
+# Funktionsweise
+
+1.  Jeder Raum misst seine Temperatur über einen Sensor.
+2.  Wenn ein Raum Wärme benötigt:
+    -   das **Heizkörperthermostat öffnet**
+    -   das **Hauptthermostat erhöht die Heizleistung**
+3.  Sobald die Zieltemperatur erreicht ist:
+    -   schließt das Heizkörperthermostat wieder
+
+------------------------------------------------------------------------
+
+# Funktionen
+
+### Raumsteuerung
+
+Für jeden Raum können eingestellt werden:
+
+-   Heizkörperthermostat
+-   Temperatursensor
+-   Fensterkontakt
+-   Tag/Nacht Temperaturen
+-   Zeitplan
+-   Abwesenheitstemperatur
+
+------------------------------------------------------------------------
+
+### Fenster-Erkennung
+
+Wenn ein Fenster geöffnet wird:
+
+-   wird die Heizung in diesem Raum pausiert
+-   das Thermostat wird abgesenkt
+-   nach dem Schließen des Fensters wird die Heizung automatisch wieder
+    aktiviert
+
+------------------------------------------------------------------------
+
+### Dashboard
+
+Das integrierte Dashboard ermöglicht:
 
 -   Räume verwalten
--   Sensoren auswählen
 -   Thermostate auswählen
--   Zieltemperaturen einstellen
--   Tag/Nacht Zeiten definieren
--   Konfiguration speichern
+-   Sensoren konfigurieren
+-   Temperaturen überwachen
+-   Heizstatus anzeigen
 
 ------------------------------------------------------------------------
 
-# 🧠 Funktionsweise
+# License
 
-Das System arbeitet nach einem Bedarfs‑Prinzip.
-
-    Sensor meldet Temperaturänderung
-             │
-             ▼
-    Raum X zu kalt? (Ist < Soll − Toleranz)
-        │           │
-       Ja          Nein
-        │           └─► Normalbetrieb
-        ▼               Hauptthermostat = max(alle Sollwerte)
-    Hauptthermostat = max(Sollwerte) + Boost
-    Raum X Ventil   = Soll + Boost  (voll auf)
-    Andere Ventile  = reduziert
-
-------------------------------------------------------------------------
-
-# 🕒 Zeitsteuerung
-
-  Modus             Zeitraum                   Verhalten
-  ----------------- -------------------------- ---------------------
-  🌙 Nacht          Nacht‑Start → Tag‑Start    target_night
-  🔥 Morgen Boost   Boost‑Start → Boost‑Ende   schnelles Aufheizen
-  ☀️ Tag            Boost‑Ende → Nacht‑Start   target_day
-
-------------------------------------------------------------------------
-
-# 📝 WebSocket & Services
-
-### WebSocket
-
-    smartdome_heat_control/save_config
-
-Speichert das komplette Konfigurations‑JSON.
-
-### Services
-
-    smartdome_heat_control.update_config
-    smartdome_heat_control.add_room
-    smartdome_heat_control.reload
-    smartdome_heat_control.remove_room
-
-------------------------------------------------------------------------
-
-# 🌍 English
-
-## Description
-
-Smartdome Heat Control is a Home Assistant integration for **coordinated
-heating control** using:
-
--   a **central thermostat**
--   multiple **room thermostats**
--   optional **temperature sensors per room**
-
-The system boosts the main thermostat whenever a room requires heat and
-prevents other rooms from overheating.
-
-### Features
-
--   Dedicated **sidebar dashboard**
--   Automatic **room discovery**
--   Dynamic **room management**
--   **Live temperature display**
--   **Heating indicator 🔥**
--   Individual **room schedules**
--   Global schedule copy
--   Optimized startup (no HA startup delay)
-
-### Installation
-
-Install via **HACS Custom Repository**:
-
-    https://github.com/19DMO89/smartdome_heat_control
-
-Restart Home Assistant afterwards.
-
-------------------------------------------------------------------------
-
-# 📄 Lizenz
-
-Dieses Projekt steht unter der **MIT Lizenz**.\
-Siehe Datei:
-
-    LICENSE
-
-------------------------------------------------------------------------
-
-*Entwickelt von [19DMO89](https://github.com) -- Teil der
-Smartdome-Serie.*
+MIT License
