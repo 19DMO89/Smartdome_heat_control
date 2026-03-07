@@ -31,6 +31,7 @@ from .const import (
     CONF_ROOM_TARGET_DAY,
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
+    CONF_ROOM_WINDOW_SENSOR,
     CONF_TOLERANCE,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
@@ -83,12 +84,16 @@ class SmartHeatingController:
         for room in self._active_rooms().values():
             room_sensor = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
             room_thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+            room_window_sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
 
             if room_sensor:
                 watch_entities.add(room_sensor)
 
             if room_thermostat:
                 watch_entities.add(room_thermostat)
+
+            if room_window_sensor:
+                watch_entities.add(room_window_sensor)
 
         if watch_entities:
             self._unsub.append(
@@ -110,9 +115,11 @@ class SmartHeatingController:
         self._evaluate()
 
     async def async_stop(self) -> None:
+        """Listener entfernen."""
         self._unsubscribe_all()
 
     def set_enabled(self, enabled: bool) -> None:
+        """Controller aktivieren/deaktivieren."""
         self._enabled = enabled
 
         if not enabled:
@@ -122,6 +129,7 @@ class SmartHeatingController:
         self.hass.async_create_task(self.async_start())
 
     def update_config(self, config: dict[str, Any]) -> None:
+        """Config aktualisieren."""
         self.config = config
         self._apply_config_defaults()
         if self._enabled:
@@ -138,8 +146,10 @@ class SmartHeatingController:
             for room in rooms.values():
                 if isinstance(room, dict):
                     room.setdefault(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
+                    room.setdefault(CONF_ROOM_WINDOW_SENSOR, "")
 
     def _unsubscribe_all(self) -> None:
+        """Alle Listener entfernen."""
         for unsub in self._unsub:
             try:
                 unsub()
@@ -148,9 +158,11 @@ class SmartHeatingController:
         self._unsub.clear()
 
     def _as_entity_id(self, value: Any) -> str | None:
+        """String als Entity-ID zurückgeben oder None."""
         return value if isinstance(value, str) and value else None
 
     def _active_rooms(self) -> dict[str, dict[str, Any]]:
+        """Nur aktive Räume zurückgeben."""
         rooms = self.config.get(CONF_ROOMS, {})
         if not isinstance(rooms, dict):
             return {}
@@ -162,6 +174,7 @@ class SmartHeatingController:
         }
 
     def _safe_float(self, value: Any) -> float | None:
+        """Beliebigen Wert sicher in float umwandeln."""
         try:
             if value is None:
                 return None
@@ -170,6 +183,7 @@ class SmartHeatingController:
             return None
 
     def _get_state_float(self, entity_id: str | None) -> float | None:
+        """Numerischen Zustand einer Entity lesen."""
         if not entity_id:
             return None
 
@@ -180,6 +194,7 @@ class SmartHeatingController:
         return self._safe_float(state.state)
 
     def _get_attr_float(self, entity_id: str | None, attr: str) -> float | None:
+        """Numerisches Attribut einer Entity lesen."""
         if not entity_id:
             return None
 
@@ -190,6 +205,7 @@ class SmartHeatingController:
         return self._safe_float(state.attributes.get(attr))
 
     def _room_temp(self, room: dict[str, Any]) -> float | None:
+        """Raumtemperatur lesen, bevorzugt Sensor, sonst Thermostat current_temperature."""
         sensor_entity = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
         if sensor_entity:
             temp = self._get_state_float(sensor_entity)
@@ -203,6 +219,7 @@ class SmartHeatingController:
         return None
 
     def _time_hhmm(self) -> str:
+        """Aktuelle Uhrzeit als HH:MM."""
         return dt_util.now().strftime("%H:%M")
 
     def _is_night_for_room(self, room: dict[str, Any]) -> bool:
@@ -229,6 +246,7 @@ class SmartHeatingController:
         return room_night_start <= now < room_day_start
 
     def _base_target_for_room(self, room: dict[str, Any]) -> float:
+        """Normale Tag-/Nacht-Solltemperatur."""
         if self._is_night_for_room(room):
             return float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
         return float(room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY))
@@ -272,7 +290,21 @@ class SmartHeatingController:
 
         return self._base_target_for_room(room)
 
+    def _is_window_open(self, room: dict[str, Any]) -> bool:
+        """Prüfen, ob das Fenster im Raum offen ist."""
+        entity_id = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
+        if not entity_id:
+            return False
+
+        state = self.hass.states.get(entity_id)
+        if not state:
+            return False
+
+        raw = str(state.state).lower()
+        return raw in {"on", "open", "true"}
+
     def _main_reference_temp(self) -> float | None:
+        """Referenztemperatur am Hauptthermostat lesen."""
         main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
         if main_sensor:
             value = self._get_state_float(main_sensor)
@@ -286,6 +318,7 @@ class SmartHeatingController:
         return None
 
     def _thermostat_min_temp(self, entity_id: str) -> float:
+        """Minimale Solltemperatur eines Thermostats lesen."""
         state = self.hass.states.get(entity_id)
         if state:
             min_temp = self._safe_float(state.attributes.get("min_temp"))
@@ -294,6 +327,7 @@ class SmartHeatingController:
         return 5.0
 
     def _in_morning_boost_window(self) -> bool:
+        """Prüfen, ob wir im Morgen-Boost-Fenster sind."""
         now = self._time_hhmm()
         start = str(
             self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
@@ -307,6 +341,7 @@ class SmartHeatingController:
         return now >= start or now < end
 
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
+        """Solltemperatur nur setzen, wenn sie sich wirklich geändert hat."""
         current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
         rounded = round(float(temp), 1)
 
@@ -326,6 +361,7 @@ class SmartHeatingController:
         )
 
     def _evaluate(self) -> None:
+        """Heizlogik auswerten."""
         if not self._enabled:
             return
 
@@ -350,8 +386,13 @@ class SmartHeatingController:
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
+            window_open = self._is_window_open(room)
 
-            needs_heat = actual is not None and actual < (target - tolerance)
+            needs_heat = (
+                not window_open
+                and actual is not None
+                and actual < (target - tolerance)
+            )
             reached_target = actual is not None and actual >= target
 
             room_states[room_id] = {
@@ -359,6 +400,7 @@ class SmartHeatingController:
                 "target": target,
                 "needs_heat": needs_heat,
                 "reached_target": reached_target,
+                "window_open": window_open,
             }
 
         any_room_needs_heat = any(
@@ -385,7 +427,9 @@ class SmartHeatingController:
             room_state = room_states[room_id]
             target = room_state["target"]
 
-            if room_state["needs_heat"]:
+            if room_state["window_open"]:
+                room_target = self._thermostat_min_temp(thermostat)
+            elif room_state["needs_heat"]:
                 room_target = target + boost_delta
             elif room_state["reached_target"]:
                 room_target = self._thermostat_min_temp(thermostat)
@@ -396,8 +440,10 @@ class SmartHeatingController:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
+        """Bei State-Änderung sofort neu bewerten."""
         self._evaluate()
 
     @callback
     def _on_minute_tick(self, now) -> None:
+        """Zyklische Auswertung jede Minute."""
         self._evaluate()
